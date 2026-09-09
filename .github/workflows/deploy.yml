@@ -32,6 +32,8 @@ jobs:
       - run: pnpm build
 
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true # create the Pages site (source: GitHub Actions) if it does not exist yet
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
