@@ -1,5 +1,5 @@
 import { newId } from '../lib/id'
-import { randomSeed } from '../lib/rng'
+import { mulberry32, randomSeed, shuffle } from '../lib/rng'
 import { generateRounds, roundShape } from '../lib/scheduler'
 import { computeStandings } from '../lib/scoring'
 import type { Arena, Final, Group, Id, Player, Round, Settings, Tournament } from '../types'
@@ -25,6 +25,7 @@ export type Action =
   | { type: 'SET_RESULT'; groupId: Id; order: Id[] }
   | { type: 'CLEAR_RESULT'; groupId: Id }
   | { type: 'SET_GROUP_ARENA'; groupId: Id; arenaId: Id }
+  | { type: 'RANDOMIZE_FINAL_ARENAS'; seed?: number }
   | { type: 'SET_CURRENT_ROUND'; index: number }
   | { type: 'NEXT_ROUND' }
   | { type: 'START_FINAL' }
@@ -229,6 +230,23 @@ export function buildFinal(t: Tournament): Final | null {
   return groups.length ? { groups, seededAt: Date.now() } : null
 }
 
+/**
+ * A random active arena for a final group: prefers arenas no other final uses,
+ * and never returns the group's current arena when any alternative exists.
+ * Returns null when the group has no unplayed final to change.
+ */
+export function pickRandomArena(t: Tournament, groupId: Id, rng: () => number = Math.random): Id | null {
+  const group = t.final?.groups.find((g) => g.id === groupId)
+  if (!group || group.result) return null
+  const active = activeArenas(t).map((a) => a.id)
+  if (active.length === 0) return null
+  const takenByOthers = new Set(t.final!.groups.filter((g) => g.id !== groupId).map((g) => g.arenaId))
+  let pool = active.filter((a) => !takenByOthers.has(a))
+  if (pool.length === 0) pool = active
+  if (pool.length > 1) pool = pool.filter((a) => a !== group.arenaId)
+  return pool[Math.floor(rng() * pool.length)]
+}
+
 /** Group stage is over: move to the final if one is configured and possible, otherwise finish. */
 function finishGroupStage(t: Tournament): Tournament {
   const final = buildFinal(t)
@@ -395,6 +413,23 @@ export function reducer(state: Tournament | null, action: Action): Tournament | 
     case 'SET_GROUP_ARENA': {
       if (!t.arenas.some((a) => a.id === action.arenaId && a.active)) return t
       return mapGroup(t, action.groupId, (g) => (g.result ? g : { ...g, arenaId: action.arenaId }))
+    }
+
+    case 'RANDOMIZE_FINAL_ARENAS': {
+      // Deal distinct random arenas to every unplayed final; played finals keep theirs.
+      if (!t.final) return t
+      const rng = mulberry32(action.seed ?? randomSeed())
+      const played = new Set(t.final.groups.filter((g) => g.result).map((g) => g.arenaId))
+      const pool = shuffle(
+        activeArenas(t)
+          .map((a) => a.id)
+          .filter((a) => !played.has(a)),
+        rng,
+      )
+      if (pool.length === 0) return t
+      let i = 0
+      const groups = t.final.groups.map((g) => (g.result ? g : { ...g, arenaId: pool[i++ % pool.length] }))
+      return touch({ ...t, final: { ...t.final, groups } })
     }
 
     case 'SET_CURRENT_ROUND': {

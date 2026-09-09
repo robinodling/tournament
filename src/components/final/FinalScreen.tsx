@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { tierName } from '../../lib/label'
-import { activeArenas, isFinalComplete } from '../../state/reducer'
+import { activeArenas, isFinalComplete, pickRandomArena } from '../../state/reducer'
 import { useNames, useTournament } from '../../state/TournamentContext'
 import type { Group } from '../../types'
 import { GroupCard } from '../round/GroupCard'
@@ -18,6 +18,7 @@ export function FinalScreen() {
   const complete = isFinalComplete(t)
   const arenas = activeArenas(t)
   let offset = 0
+  const unplayed = final.groups.filter((g) => !g.result).length
 
   return (
     <div className="screen">
@@ -27,6 +28,11 @@ export function FinalScreen() {
           Seeded from the standings after {t.rounds.length} rounds.{' '}
           {total > 1 ? 'Placements decide the overall order within each tier.' : `Placements decide positions 1–${k}.`}
         </p>
+        {unplayed > 1 && arenas.length > 1 && (
+          <button type="button" className="btn btn-sm" onClick={() => dispatch({ type: 'RANDOMIZE_FINAL_ARENAS' })}>
+            🎲 Random {label(2).toLowerCase()} for all finals
+          </button>
+        )}
       </div>
 
       {final.groups.map((g, i) => {
@@ -36,15 +42,15 @@ export function FinalScreen() {
         return (
           <div key={g.id} className="stack" style={{ gap: 6 }}>
             <div className="status-line">
-              <strong>{name}</strong>
-              <span className="muted small">
+              <strong style={{ whiteSpace: 'nowrap' }}>{name}</strong>
+              <span className="muted small" style={{ whiteSpace: 'nowrap' }}>
                 positions {first}–{offset}
               </span>
-              <span className="grow" />
-              {!g.result && arenas.length > 1 && (
+            </div>
+            {!g.result && arenas.length > 1 && (
+              <div className="row">
                 <select
-                  className="input"
-                  style={{ width: 'auto', minHeight: 36 }}
+                  className="input grow"
                   value={g.arenaId}
                   onChange={(e) => dispatch({ type: 'SET_GROUP_ARENA', groupId: g.id, arenaId: e.target.value })}
                   aria-label={`${label(1)} for the ${name}`}
@@ -55,8 +61,20 @@ export function FinalScreen() {
                     </option>
                   ))}
                 </select>
-              )}
-            </div>
+                <button
+                  type="button"
+                  className="btn"
+                  aria-label={`Random ${label(1).toLowerCase()} for the ${name}`}
+                  title={`Pick a random ${label(1).toLowerCase()}`}
+                  onClick={() => {
+                    const arenaId = pickRandomArena(t, g.id)
+                    if (arenaId) dispatch({ type: 'SET_GROUP_ARENA', groupId: g.id, arenaId })
+                  }}
+                >
+                  🎲
+                </button>
+              </div>
+            )}
             <GroupCard group={g} seeded onClick={() => setEditing({ group: g, context: name })} />
           </div>
         )

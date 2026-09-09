@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initialTournament, isFinalComplete, isLocked, reducer, validateSetup, type Action } from '../../state/reducer'
+import { initialTournament, isFinalComplete, isLocked, pickRandomArena, reducer, validateSetup, type Action } from '../../state/reducer'
 import { computeFinalRanking, computeStandings } from '../scoring'
 import { describeSchedule } from '../scheduler'
 import type { Tournament } from '../../types'
@@ -190,5 +190,42 @@ describe('reducer', () => {
     delete (old.settings as Partial<typeof old.settings>).finalStage
     const t = reducer(null, { type: 'HYDRATE', tournament: old })!
     expect(t.settings.finalStage).toBe('none')
+  })
+
+  it('random arena for a final avoids other finals and always changes when it can', () => {
+    let t = run([{ type: 'UPDATE_SETTINGS', settings: { finalStage: 'tiers' } }, { type: 'START' }], setupEight())
+    t = playAllRounds(t)
+    const [a, b] = t.final!.groups
+    for (const r of [0, 0.3, 0.6, 0.99]) {
+      const pick = pickRandomArena(t, a.id, () => r)!
+      expect(pick).not.toBe(a.arenaId)
+      expect(pick).not.toBe(b.arenaId)
+      expect(t.arenas.map((x) => x.id)).toContain(pick)
+    }
+    // played finals cannot be moved
+    t = reducer(t, { type: 'SET_RESULT', groupId: a.id, order: a.playerIds })!
+    expect(pickRandomArena(t, a.id)).toBeNull()
+    // with only one arena left there is no alternative → keeps the current one
+    const single = { ...t, arenas: t.arenas.map((x) => ({ ...x, active: x.id === b.arenaId })) }
+    expect(pickRandomArena(single, b.id)).toBe(b.arenaId)
+  })
+
+  it('randomizing all finals deals distinct arenas and leaves played finals alone', () => {
+    let t = run([{ type: 'UPDATE_SETTINGS', settings: { finalStage: 'tiers' } }, { type: 'START' }], setupEight())
+    t = playAllRounds(t)
+    const before = t.final!.groups.map((g) => g.arenaId)
+    let changed = false
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const next = reducer(t, { type: 'RANDOMIZE_FINAL_ARENAS', seed })!
+      const arenas = next.final!.groups.map((g) => g.arenaId)
+      expect(new Set(arenas).size).toBe(arenas.length)
+      if (arenas.join() !== before.join()) changed = true
+    }
+    expect(changed).toBe(true)
+    const a = t.final!.groups[0]
+    t = reducer(t, { type: 'SET_RESULT', groupId: a.id, order: a.playerIds })!
+    const after = reducer(t, { type: 'RANDOMIZE_FINAL_ARENAS', seed: 9 })!
+    expect(after.final!.groups[0].arenaId).toBe(a.arenaId)
+    expect(after.final!.groups[1].arenaId).not.toBe(a.arenaId)
   })
 })
