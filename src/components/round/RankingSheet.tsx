@@ -1,0 +1,86 @@
+import { useEffect, useState } from 'react'
+import { pointsForPlacement, pts } from '../../lib/scoring'
+import { ordinal } from '../../lib/label'
+import { useNames, useTournament } from '../../state/TournamentContext'
+import type { Group, Id } from '../../types'
+import { Sheet } from '../common/Sheet'
+
+interface Props {
+  roundIndex: number
+  group: Group | null
+  onClose: () => void
+}
+
+/** Tap players in finishing order. */
+export function RankingSheet({ roundIndex, group, onClose }: Props) {
+  const { dispatch } = useTournament()
+  const { player, arena } = useNames()
+  const [order, setOrder] = useState<Id[]>([])
+
+  useEffect(() => {
+    setOrder(group?.result ?? [])
+  }, [group])
+
+  if (!group) return null
+  const k = group.playerIds.length
+  const remaining = group.playerIds.filter((id) => !order.includes(id))
+  const complete = order.length === k
+
+  const save = () => {
+    dispatch({ type: 'SET_RESULT', roundIndex, groupId: group.id, order })
+    onClose()
+  }
+  const clear = () => {
+    if (!group.result || window.confirm('Remove this result?')) {
+      dispatch({ type: 'CLEAR_RESULT', roundIndex, groupId: group.id })
+      onClose()
+    }
+  }
+
+  return (
+    <Sheet open title={`Round ${roundIndex + 1} · ${arena(group.arenaId)}`} onClose={onClose}>
+      {order.length > 0 && (
+        <div className="ranked-list">
+          {order.map((id, i) => (
+            <div key={id} className="ranked-item">
+              <span className={`placement p${i + 1}`}>{ordinal(i + 1)}</span>
+              <span className="grow">{player(id)}</span>
+              <span className="pts">{pts(pointsForPlacement(i + 1, k))}</span>
+              {i === order.length - 1 && (
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOrder(order.slice(0, -1))} aria-label={`Undo ${player(id)}`}>
+                  ↩︁ Undo
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {remaining.length > 0 && (
+        <div className="stack">
+          <p className="hint">
+            Who finished <strong>{ordinal(order.length + 1)}</strong>?
+          </p>
+          {remaining.map((id) => (
+            <button key={id} type="button" className="btn rank-btn" onClick={() => setOrder([...order, id])}>
+              <span className="placement">{ordinal(order.length + 1)}</span>
+              {player(id)}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="row">
+        {group.result && (
+          <button type="button" className="btn btn-danger" onClick={clear}>
+            Clear
+          </button>
+        )}
+        <button type="button" className="btn grow" onClick={onClose}>
+          Cancel
+        </button>
+        <button type="button" className="btn btn-primary grow" disabled={!complete} onClick={save}>
+          Save result
+        </button>
+      </div>
+    </Sheet>
+  )
+}
