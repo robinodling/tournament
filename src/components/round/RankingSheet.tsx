@@ -6,13 +6,16 @@ import type { Group, Id } from '../../types'
 import { Sheet } from '../common/Sheet'
 
 interface Props {
-  roundIndex: number
+  /** Where this group belongs, e.g. "Round 2" or "A-final". */
+  context: string
   group: Group | null
+  /** Finals decide positions, not points. */
+  showPoints?: boolean
   onClose: () => void
 }
 
 /** Tap players in finishing order. */
-export function RankingSheet({ roundIndex, group, onClose }: Props) {
+export function RankingSheet({ context, group, showPoints = true, onClose }: Props) {
   const { dispatch } = useTournament()
   const { player, arena } = useNames()
   const [order, setOrder] = useState<Id[]>([])
@@ -27,25 +30,25 @@ export function RankingSheet({ roundIndex, group, onClose }: Props) {
   const complete = order.length === k
 
   const save = () => {
-    dispatch({ type: 'SET_RESULT', roundIndex, groupId: group.id, order })
+    dispatch({ type: 'SET_RESULT', groupId: group.id, order })
     onClose()
   }
   const clear = () => {
     if (!group.result || window.confirm('Remove this result?')) {
-      dispatch({ type: 'CLEAR_RESULT', roundIndex, groupId: group.id })
+      dispatch({ type: 'CLEAR_RESULT', groupId: group.id })
       onClose()
     }
   }
 
   return (
-    <Sheet open title={`Round ${roundIndex + 1} · ${arena(group.arenaId)}`} onClose={onClose}>
+    <Sheet open title={`${context} · ${arena(group.arenaId)}`} onClose={onClose}>
       {order.length > 0 && (
         <div className="ranked-list">
           {order.map((id, i) => (
             <div key={id} className="ranked-item">
               <span className={`placement p${i + 1}`}>{ordinal(i + 1)}</span>
               <span className="grow">{player(id)}</span>
-              <span className="pts">{pts(pointsForPlacement(i + 1, k))}</span>
+              {showPoints && <span className="pts">{pts(pointsForPlacement(i + 1, k))}</span>}
               {i === order.length - 1 && (
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOrder(order.slice(0, -1))} aria-label={`Undo ${player(id)}`}>
                   ↩︁ Undo

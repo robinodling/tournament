@@ -104,9 +104,48 @@ export function computeStandings(t: Tournament): StandingRow[] {
   return list
 }
 
+export interface FinalRanking {
+  rows: StandingRow[]
+  /** True when at least one final group has a result, i.e. positions are (partly) decided by the final. */
+  decidedByFinal: boolean
+  /** Number of players whose position comes from the final stage. */
+  finalists: number
+}
+
+/**
+ * Overall order once a final stage exists: finalists take positions by tier and
+ * final placement (provisionally by standings while a final is unplayed), then
+ * everybody else in group-stage standings order.
+ */
+export function computeFinalRanking(t: Tournament): FinalRanking {
+  const standings = computeStandings(t)
+  const groups = t.final?.groups ?? []
+  if (groups.length === 0) return { rows: standings, decidedByFinal: false, finalists: 0 }
+
+  const byId = new Map(standings.map((r) => [r.playerId, r]))
+  const ordered: StandingRow[] = []
+  let decided = false
+  for (const g of groups) {
+    const order = g.result ?? [...g.playerIds].sort((a, b) => standings.indexOf(byId.get(a)!) - standings.indexOf(byId.get(b)!))
+    if (g.result) decided = true
+    for (const pid of order) {
+      const row = byId.get(pid)
+      if (row) ordered.push({ ...row, rank: ordered.length + 1 })
+    }
+  }
+  const finalists = ordered.length
+  const rest = standings.filter((r) => !ordered.some((o) => o.playerId === r.playerId))
+  rest.forEach((r, i) => {
+    const prev = i > 0 ? rest[i - 1] : null
+    const rank = prev && tied(r, prev) ? ordered[ordered.length - 1].rank : finalists + i + 1
+    ordered.push({ ...r, rank })
+  })
+  return { rows: ordered, decidedByFinal: decided, finalists }
+}
+
 export function standingsAsText(t: Tournament): string {
-  const rows = computeStandings(t)
-  const lines = [`${t.name} — final standings`, '']
+  const { rows, decidedByFinal } = computeFinalRanking(t)
+  const lines = [`${t.name} — final standings${decidedByFinal ? ' (decided by the final)' : ''}`, '']
   for (const r of rows) {
     lines.push(`${String(r.rank).padStart(2)}. ${r.name} — ${formatPoints(r.points)} pts (${r.placements[0]}× 1st)`)
   }

@@ -17,6 +17,11 @@ and opponents as possible.
 - **Standings**: total points, ties broken by count-back (most 1sts, then 2nds, …).
 - **Schedule** is optimised for, in priority order: every player plays every arena (as evenly as
   possible), byes spread evenly, group-mates vary, arenas used evenly.
+- **Final stage** (optional): after the rounds, either the top `k` in the standings play one
+  final whose placements decide positions 1–`k`, or everyone plays *tiered* finals (standings
+  1–`k` in the A-final, `k+1`–`2k` in the B-final, … one per arena) whose placements decide the
+  overall order. Group-stage points remain the qualification table; finals decide positions,
+  they do not add points. The admin can pick the arena for each final, re-seed it, or skip it.
 
 ### 8 players, 4 arenas, groups of 4, 4 rounds
 
@@ -37,14 +42,20 @@ The admin uses the app on their phone:
    Tap a group and tap players in finishing order to record the result. When all groups are
    done, advance to the next round.
 3. **Standings / Schedule** — live table; tap any group in any round to correct a result.
-4. **Manage** — add or remove players (unplayed rounds are re-drawn, played ones are kept),
-   swap a broken arena for a replacement (schedule kept), change the round count, export /
-   import JSON, restore an automatic backup, or start over.
+4. **Final** (if configured) — seeded automatically when the last round is done; enter each
+   final like any group, then finish.
+5. **Manage** — add or remove players (unplayed rounds are re-drawn, played ones are kept),
+   swap a broken arena for a replacement (schedule kept), change the round count or final
+   format, start the final early, install the app, export / import JSON, restore an automatic
+   backup, or start over. Before a tournament is created, the Manage tab holds the
+   device-level settings (install, storage, backups).
 
 ### Persistence
 
 State is saved on every change to IndexedDB and mirrored to localStorage, with the last 40
-states kept as backups. The app asks the browser for persistent storage and is installable; on
+states kept as backups. The app asks the browser for persistent storage and is installable
+(the service worker precaches the app shell on first visit, which is what makes Chrome offer
+**Install app**; an Install button appears in the app when the browser allows a prompt). On
 iOS, **Add to Home Screen** is what exempts it from Safari's storage clean-up. Export a JSON
 copy if you want a belt-and-braces backup.
 

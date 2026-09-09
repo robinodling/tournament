@@ -11,3 +11,8 @@ export function ordinal(n: number): string {
   const v = n % 100
   return n + (s[(v - 20) % 10] ?? s[v] ?? s[0])
 }
+
+/** "Final" when there is one, otherwise "A-final", "B-final", … */
+export function tierName(index: number, total: number): string {
+  return total <= 1 ? 'Final' : `${String.fromCharCode(65 + index)}-final`
+}

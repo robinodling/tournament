@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { initialTournament, isLocked, reducer, validateSetup, type Action } from '../../state/reducer'
+import { initialTournament, isFinalComplete, isLocked, reducer, validateSetup, type Action } from '../../state/reducer'
+import { computeFinalRanking, computeStandings } from '../scoring'
 import { describeSchedule } from '../scheduler'
 import type { Tournament } from '../../types'
 
@@ -49,7 +50,7 @@ describe('reducer', () => {
     expect(t.phase).toBe('running')
     for (let r = 0; r < 4; r++) {
       for (const g of t.rounds[r].groups) {
-        t = reducer(t, { type: 'SET_RESULT', roundIndex: r, groupId: g.id, order: [...g.playerIds].reverse() })!
+        t = reducer(t, { type: 'SET_RESULT', groupId: g.id, order: [...g.playerIds].reverse() })!
       }
       expect(isLocked(t.rounds[r])).toBe(true)
       t = reducer(t, { type: 'NEXT_ROUND' })!
@@ -61,14 +62,14 @@ describe('reducer', () => {
     let t = run([{ type: 'START' }], setupEight())
     const g = t.rounds[0].groups[0]
     const before = t
-    t = reducer(t, { type: 'SET_RESULT', roundIndex: 0, groupId: g.id, order: g.playerIds.slice(0, 3) })!
+    t = reducer(t, { type: 'SET_RESULT', groupId: g.id, order: g.playerIds.slice(0, 3) })!
     expect(t).toBe(before)
   })
 
   it('removing a player mid-tournament keeps locked rounds and re-draws the rest', () => {
     let t = run([{ type: 'START' }], setupEight())
     for (let r = 0; r < 2; r++)
-      for (const g of t.rounds[r].groups) t = reducer(t, { type: 'SET_RESULT', roundIndex: r, groupId: g.id, order: g.playerIds })!
+      for (const g of t.rounds[r].groups) t = reducer(t, { type: 'SET_RESULT', groupId: g.id, order: g.playerIds })!
     t = reducer(t, { type: 'NEXT_ROUND' })!
     t = reducer(t, { type: 'NEXT_ROUND' })!
     const lockedBefore = [t.rounds[0], t.rounds[1]]
@@ -89,7 +90,7 @@ describe('reducer', () => {
   it('replacing an arena moves only unplayed groups to the new arena', () => {
     let t = run([{ type: 'START' }], setupEight())
     const g0 = t.rounds[0].groups[0]
-    t = reducer(t, { type: 'SET_RESULT', roundIndex: 0, groupId: g0.id, order: g0.playerIds })!
+    t = reducer(t, { type: 'SET_RESULT', groupId: g0.id, order: g0.playerIds })!
     const broken = g0.arenaId
     t = reducer(t, { type: 'REPLACE_ARENA', id: broken, name: 'Spare' })!
     const spare = t.arenas.find((a) => a.name === 'Spare')!
@@ -103,7 +104,7 @@ describe('reducer', () => {
 
   it('changing the round count while running adds/removes unplayed rounds only', () => {
     let t = run([{ type: 'START' }], setupEight())
-    for (const g of t.rounds[0].groups) t = reducer(t, { type: 'SET_RESULT', roundIndex: 0, groupId: g.id, order: g.playerIds })!
+    for (const g of t.rounds[0].groups) t = reducer(t, { type: 'SET_RESULT', groupId: g.id, order: g.playerIds })!
     t = reducer(t, { type: 'UPDATE_SETTINGS', settings: { roundCount: 6 } })!
     expect(t.rounds).toHaveLength(6)
     t = reducer(t, { type: 'UPDATE_SETTINGS', settings: { roundCount: 1 } })!
@@ -115,5 +116,79 @@ describe('reducer', () => {
     let t = run([{ type: 'START' }], setupEight())
     t = reducer(t, { type: 'UPDATE_SETTINGS', settings: { groupSize: 2 } })!
     expect(t.settings.groupSize).toBe(4)
+  })
+
+  function playAllRounds(t: Tournament): Tournament {
+    for (let r = 0; r < t.rounds.length; r++) {
+      for (const g of t.rounds[r].groups) t = reducer(t, { type: 'SET_RESULT', groupId: g.id, order: [...g.playerIds].sort() })!
+      t = reducer(t, { type: 'NEXT_ROUND' })!
+    }
+    return t
+  }
+
+  it('without a final stage the tournament finishes after the last round', () => {
+    const t = playAllRounds(run([{ type: 'START' }], setupEight()))
+    expect(t.phase).toBe('finished')
+    expect(t.final).toBeUndefined()
+  })
+
+  it('tiered finals: everyone is seeded by standings into A/B finals whose results decide the order', () => {
+    let t = run([{ type: 'UPDATE_SETTINGS', settings: { finalStage: 'tiers' } }, { type: 'START' }], setupEight())
+    t = playAllRounds(t)
+    expect(t.phase).toBe('final')
+    expect(t.final!.groups).toHaveLength(2)
+    const standings = computeStandings(t).map((r) => r.playerId)
+    expect(t.final!.groups[0].playerIds).toEqual(standings.slice(0, 4))
+    expect(t.final!.groups[1].playerIds).toEqual(standings.slice(4, 8))
+    expect(t.final!.groups[0].arenaId).not.toBe(t.final!.groups[1].arenaId)
+    // provisional ranking follows standings until played
+    expect(computeFinalRanking(t).decidedByFinal).toBe(false)
+    // B-final played in reverse seeding order → its last seed takes 5th
+    const b = t.final!.groups[1]
+    t = reducer(t, { type: 'SET_RESULT', groupId: b.id, order: [...b.playerIds].reverse() })!
+    const a = t.final!.groups[0]
+    t = reducer(t, { type: 'SET_RESULT', groupId: a.id, order: [...a.playerIds].reverse() })!
+    expect(isFinalComplete(t)).toBe(true)
+    const ranking = computeFinalRanking(t)
+    expect(ranking.decidedByFinal).toBe(true)
+    expect(ranking.rows.map((r) => r.playerId)).toEqual([...[...a.playerIds].reverse(), ...[...b.playerIds].reverse()])
+    expect(ranking.rows.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    t = reducer(t, { type: 'FINISH' })!
+    expect(t.phase).toBe('finished')
+    expect(t.final).toBeDefined()
+  })
+
+  it('top final: only the best four play, the rest keep their standings positions', () => {
+    let t = run([{ type: 'UPDATE_SETTINGS', settings: { finalStage: 'top' } }, { type: 'START' }], setupEight())
+    t = playAllRounds(t)
+    expect(t.final!.groups).toHaveLength(1)
+    const g = t.final!.groups[0]
+    const fourth = g.playerIds[3]
+    t = reducer(t, { type: 'SET_RESULT', groupId: g.id, order: [fourth, ...g.playerIds.slice(0, 3)] })!
+    const rows = computeFinalRanking(t).rows
+    expect(rows[0].playerId).toBe(fourth)
+    expect(rows.slice(4).map((r) => r.playerId)).toEqual(computeStandings(t).slice(4).map((r) => r.playerId))
+  })
+
+  it('a final can be re-seeded before results and skipped entirely', () => {
+    let t = run([{ type: 'UPDATE_SETTINGS', settings: { finalStage: 'top' } }, { type: 'START' }], setupEight())
+    t = playAllRounds(t)
+    const arena = t.final!.groups[0].arenaId
+    const other = t.arenas.find((a) => a.id !== arena)!.id
+    t = reducer(t, { type: 'SET_GROUP_ARENA', groupId: t.final!.groups[0].id, arenaId: other })!
+    expect(t.final!.groups[0].arenaId).toBe(other)
+    const reseeded = reducer(t, { type: 'RESEED_FINAL' })!
+    expect(reseeded.final!.groups[0].playerIds).toEqual(t.final!.groups[0].playerIds)
+    t = reducer(t, { type: 'SKIP_FINAL' })!
+    expect(t.phase).toBe('finished')
+    expect(t.final).toBeUndefined()
+    expect(computeFinalRanking(t).decidedByFinal).toBe(false)
+  })
+
+  it('old saves without finalStage are normalised on hydrate', () => {
+    const old = setupEight()
+    delete (old.settings as Partial<typeof old.settings>).finalStage
+    const t = reducer(null, { type: 'HYDRATE', tournament: old })!
+    expect(t.settings.finalStage).toBe('none')
   })
 })

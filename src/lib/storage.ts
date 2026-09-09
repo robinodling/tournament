@@ -245,7 +245,7 @@ export function parseTournament(text: string): Tournament {
   if (data.version !== 1) throw new Error('Unsupported tournament version')
   if (!Array.isArray(data.players) || !Array.isArray(data.arenas) || !Array.isArray(data.rounds) || !data.settings)
     throw new Error('Tournament file is missing data')
-  if (!['setup', 'running', 'finished'].includes(String(data.phase))) throw new Error('Tournament file is corrupt')
+  if (!['setup', 'running', 'final', 'finished'].includes(String(data.phase))) throw new Error('Tournament file is corrupt')
   return {
     ...(data as Tournament),
     currentRound: typeof data.currentRound === 'number' ? data.currentRound : 0,

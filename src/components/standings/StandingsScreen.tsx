@@ -17,6 +17,7 @@ export function StandingsScreen() {
       </div>
       <StandingsTable rows={rows} />
       <p className="hint">Ties are broken by most 1st places, then 2nd places, and so on.</p>
+      {t.phase === 'final' && <p className="hint">The final stage is in progress — these are the group-stage standings; the final decides the top positions.</p>}
     </div>
   )
 }

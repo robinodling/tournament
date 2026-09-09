@@ -2,10 +2,11 @@ import { useState } from 'react'
 import { describeSchedule, roundShape } from '../../lib/scheduler'
 import { pointsForBye, pointsForPlacement } from '../../lib/scoring'
 import { ordinal } from '../../lib/label'
-import { activeArenas, activePlayers, validateSetup } from '../../state/reducer'
+import { activeArenas, activePlayers, finalShape, validateSetup } from '../../state/reducer'
+import type { FinalStage } from '../../types'
 import { useNames, useTournament } from '../../state/TournamentContext'
 import { Stepper } from '../common/Stepper'
-import { RestoreSection } from '../manage/RestoreSection'
+import { InstallCard } from '../common/InstallCard'
 import { GroupCard } from '../round/GroupCard'
 import { NamedList } from './NamedList'
 import { QualitySummary } from './QualitySummary'
@@ -17,7 +18,8 @@ export function SetupScreen() {
 
   const players = activePlayers(t)
   const arenas = activeArenas(t)
-  const { groupSize, roundCount, byePoints } = t.settings
+  const { groupSize, roundCount, byePoints, finalStage } = t.settings
+  const fin = finalShape(t)
   const shape = roundShape(players.length, arenas.length, groupSize)
   const problems = validateSetup(t)
   const hasSchedule = t.rounds.length > 0
@@ -41,13 +43,14 @@ export function SetupScreen() {
   }
 
   return (
-    <div className="screen screen-setup">
+    <div className="screen">
       <header className="section">
         <h1>New tournament</h1>
         <p className="hint">
           Set up players, {label(2).toLowerCase()} and the format. Everything can be changed until you start; players and{' '}
           {label(2).toLowerCase()} can also be adjusted mid-tournament.
         </p>
+        <InstallCard compact />
       </header>
 
       <section className="section">
@@ -109,9 +112,30 @@ export function SetupScreen() {
             <option value="zero">None (0 pts)</option>
           </select>
         </label>
+        <label className="stepper">
+          <span className="stepper-label">Final stage</span>
+          <select className="input" style={{ width: 'auto' }} value={finalStage} onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', settings: { finalStage: e.target.value as FinalStage } })}>
+            <option value="none">None</option>
+            <option value="top">Top {groupSize} final</option>
+            <option value="tiers">Finals for everyone</option>
+          </select>
+        </label>
         <p className="hint">
           Points per round: <strong>{pointsPreview}</strong>
         </p>
+        {finalStage === 'top' && (
+          <p className="hint">
+            After the rounds, the top {groupSize} in the standings play one final; its placements decide positions 1–{groupSize}. Everyone else keeps their standings position.
+          </p>
+        )}
+        {finalStage === 'tiers' && fin.groups > 0 && (
+          <p className="hint">
+            After the rounds, standings 1–{groupSize} play the A-final{fin.groups > 1 ? `, ${groupSize + 1}–${2 * groupSize} the B-final` : ''}
+            {fin.groups > 2 ? ', and so on' : ''} — {fin.groups} {fin.groups === 1 ? 'final' : 'finals'} on {fin.groups} {label(fin.groups).toLowerCase()}. Final placements decide the overall order
+            {fin.finalists < players.length ? `; players below ${fin.finalists} keep their standings position` : ''}.
+          </p>
+        )}
+        {finalStage !== 'none' && fin.groups === 0 && players.length > 0 && <p className="problem">⚠︁ No final possible with these numbers — it will be skipped.</p>}
         {hints.map((h) => (
           <p key={h} className="hint">
             {h}
@@ -158,8 +182,6 @@ export function SetupScreen() {
           {hasSchedule ? 'Start tournament' : 'Generate & start tournament'}
         </button>
       </section>
-
-      <RestoreSection />
     </div>
   )
 }

@@ -30,16 +30,30 @@ export interface Round {
 
 export type ByePoints = 'average' | 'zero'
 
+/**
+ * Optional stage after the rounds. 'top': the best `groupSize` players play one
+ * final that decides positions 1..k. 'tiers': everyone plays a final in tiers by
+ * standing (A-final, B-final, …, one per arena); placements decide the order.
+ */
+export type FinalStage = 'none' | 'top' | 'tiers'
+
 export interface Settings {
   groupSize: number
   roundCount: number
   byePoints: ByePoints
   /** Display word for "the thing a group plays on": Arena, Machine, Table, Court… */
   arenaLabel: string
+  finalStage: FinalStage
   seed: number
 }
 
-export type Phase = 'setup' | 'running' | 'finished'
+export interface Final {
+  /** Tier order: groups[0] is the A-final. playerIds are in seeding (standings) order. */
+  groups: Group[]
+  seededAt: number
+}
+
+export type Phase = 'setup' | 'running' | 'final' | 'finished'
 
 export interface Tournament {
   version: 1
@@ -50,6 +64,7 @@ export interface Tournament {
   arenas: Arena[]
   settings: Settings
   rounds: Round[]
+  final?: Final
   currentRound: number
   createdAt: number
   updatedAt: number

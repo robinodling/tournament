@@ -13,7 +13,7 @@ function tournament(): Tournament {
       { id: 'a1', name: 'A1', active: true },
       { id: 'a2', name: 'A2', active: true },
     ],
-    settings: { groupSize: 4, roundCount: 2, byePoints: 'average', arenaLabel: 'Arena', seed: 1 },
+    settings: { groupSize: 4, roundCount: 2, byePoints: 'average', arenaLabel: 'Arena', finalStage: 'none', seed: 1 },
     rounds: [
       { groups: [{ id: 'g1', arenaId: 'a1', playerIds: ['p0', 'p1', 'p2', 'p3'], result: ['p0', 'p1', 'p2', 'p3'] }], byePlayerIds: ['p4'] },
       { groups: [{ id: 'g2', arenaId: 'a2', playerIds: ['p4', 'p1', 'p2', 'p3'], result: ['p1', 'p4', 'p3', 'p2'] }], byePlayerIds: ['p0'] },

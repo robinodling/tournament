@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { exportJson, requestPersistentStorage, storageStatus, type StorageStatus } from '../../lib/storage'
-import { isLocked } from '../../state/reducer'
+import { finalHasResults, isLocked } from '../../state/reducer'
+import type { FinalStage } from '../../types'
 import { useNames, useTournament } from '../../state/TournamentContext'
+import { InstallCard } from '../common/InstallCard'
 import { Stepper } from '../common/Stepper'
 import { RestoreSection } from './RestoreSection'
 
@@ -42,21 +44,46 @@ export function ManageScreen() {
     if (granted === false) window.alert('The browser did not grant persistent storage yet. Installing the app (Add to Home Screen) usually does the trick.')
   }
 
+  const setup = t.phase === 'setup'
+
   return (
     <div className="screen">
       <h2>Manage</h2>
+      {setup && <p className="hint">Players, {label(2).toLowerCase()} and the format live on the Setup tab. This tab covers the app itself: installing, storage and backups.</p>}
 
+      {!setup && (
       <section className="section">
         <h3 className="section-title">Tournament</h3>
         <input className="input" value={t.name} onChange={(e) => dispatch({ type: 'SET_NAME', name: e.target.value })} aria-label="Tournament name" />
-        <Stepper
-          label="Rounds"
-          hint={`${t.rounds.filter(isLocked).length} locked`}
-          value={t.settings.roundCount}
-          min={Math.max(1, t.rounds.filter(isLocked).length)}
-          max={30}
-          onChange={(n) => dispatch({ type: 'UPDATE_SETTINGS', settings: { roundCount: n } })}
-        />
+        {t.phase === 'running' ? (
+          <Stepper
+            label="Rounds"
+            hint={`${t.rounds.filter(isLocked).length} locked`}
+            value={t.settings.roundCount}
+            min={Math.max(1, t.rounds.filter(isLocked).length)}
+            max={30}
+            onChange={(n) => dispatch({ type: 'UPDATE_SETTINGS', settings: { roundCount: n } })}
+          />
+        ) : (
+          <div className="stepper">
+            <span className="stepper-label">Rounds</span>
+            <span>{t.rounds.length}</span>
+          </div>
+        )}
+        <label className="stepper">
+          <span className="stepper-label">Final stage</span>
+          <select
+            className="input"
+            style={{ width: 'auto' }}
+            value={t.settings.finalStage}
+            disabled={t.phase !== 'running'}
+            onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', settings: { finalStage: e.target.value as FinalStage } })}
+          >
+            <option value="none">None</option>
+            <option value="top">Top {t.settings.groupSize} final</option>
+            <option value="tiers">Finals for everyone</option>
+          </select>
+        </label>
         <label className="stepper">
           <span className="stepper-label">Points for sitting out</span>
           <select className="input" style={{ width: 'auto' }} value={t.settings.byePoints} onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', settings: { byePoints: e.target.value as 'average' | 'zero' } })}>
@@ -64,10 +91,45 @@ export function ManageScreen() {
             <option value="zero">None</option>
           </select>
         </label>
-        {t.phase === 'running' && (
-          <button type="button" className="btn" onClick={() => window.confirm('Finish the tournament now? Unplayed rounds are ignored.') && dispatch({ type: 'FINISH' })}>
-            🏁 Finish tournament now
+        {t.phase === 'running' && t.settings.finalStage !== 'none' && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => window.confirm('End the group stage now and seed the final from the current standings? Unplayed rounds are ignored.') && dispatch({ type: 'START_FINAL' })}
+          >
+            Start the final now
           </button>
+        )}
+        {t.phase === 'running' && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => window.confirm(`Finish the tournament now? Unplayed rounds${t.settings.finalStage !== 'none' ? ' and the final' : ''} are skipped.`) && dispatch({ type: 'FINISH' })}
+          >
+            🏁 Finish tournament now{t.settings.finalStage !== 'none' ? ' (skip final)' : ''}
+          </button>
+        )}
+        {t.phase === 'final' && (
+          <>
+            <button
+              type="button"
+              className="btn"
+              disabled={finalHasResults(t)}
+              onClick={() => window.confirm('Re-seed the final from the current standings?') && dispatch({ type: 'RESEED_FINAL' })}
+            >
+              Re-seed final from standings
+            </button>
+            <button type="button" className="btn btn-danger" onClick={() => window.confirm('Skip the final? The standings decide the final order.') && dispatch({ type: 'SKIP_FINAL' })}>
+              Skip the final
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => window.confirm('Finish now? Finals without a result fall back to standings order.') && dispatch({ type: 'FINISH' })}
+            >
+              🏁 Finish tournament now
+            </button>
+          </>
         )}
         {t.phase === 'finished' && (
           <button type="button" className="btn" onClick={() => dispatch({ type: 'REOPEN' })}>
@@ -75,7 +137,9 @@ export function ManageScreen() {
           </button>
         )}
       </section>
+      )}
 
+      {!setup && (
       <section className="section">
         <h3 className="section-title">Players</h3>
         <div className="list">
@@ -111,7 +175,9 @@ export function ManageScreen() {
           </button>
         </div>
       </section>
+      )}
 
+      {!setup && (
       <section className="section">
         <h3 className="section-title">{label(2)}</h3>
         <div className="list">
@@ -160,6 +226,12 @@ export function ManageScreen() {
           <strong>Swap</strong> keeps the schedule and moves unplayed groups to the replacement. <strong>Remove</strong> re-draws unplayed rounds without it.
         </p>
       </section>
+      )}
+
+      <section className="section">
+        <h3 className="section-title">Install</h3>
+        <InstallCard />
+      </section>
 
       <section className="section">
         <h3 className="section-title">Storage</h3>
@@ -198,9 +270,9 @@ export function ManageScreen() {
       <section className="section">
         <h3 className="section-title">Danger zone</h3>
         <div className="card danger-zone stack">
-          <p className="hint small">Starts a fresh tournament. The current one stays in backups (see Restore).</p>
-          <button type="button" className="btn btn-danger" onClick={() => window.confirm('Start a new tournament? The current one is kept in backups.') && dispatch({ type: 'RESET' })}>
-            Start a new tournament
+          <p className="hint small">{setup ? 'Clears the current setup.' : 'Starts a fresh tournament.'} The current one stays in backups (see Restore).</p>
+          <button type="button" className="btn btn-danger" onClick={() => window.confirm(setup ? 'Clear the current setup? It is kept in backups.' : 'Start a new tournament? The current one is kept in backups.') && dispatch({ type: 'RESET' })}>
+            {setup ? 'Clear setup' : 'Start a new tournament'}
           </button>
         </div>
       </section>

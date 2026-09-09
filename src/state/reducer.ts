@@ -1,7 +1,8 @@
 import { newId } from '../lib/id'
 import { randomSeed } from '../lib/rng'
 import { generateRounds, roundShape } from '../lib/scheduler'
-import type { Arena, Id, Player, Round, Settings, Tournament } from '../types'
+import { computeStandings } from '../lib/scoring'
+import type { Arena, Final, Group, Id, Player, Round, Settings, Tournament } from '../types'
 
 export type Action =
   | { type: 'HYDRATE'; tournament: Tournament }
@@ -21,10 +22,14 @@ export type Action =
   | { type: 'REPLACE_ARENA'; id: Id; name: string }
   | { type: 'GENERATE_SCHEDULE'; seed?: number }
   | { type: 'START' }
-  | { type: 'SET_RESULT'; roundIndex: number; groupId: Id; order: Id[] }
-  | { type: 'CLEAR_RESULT'; roundIndex: number; groupId: Id }
+  | { type: 'SET_RESULT'; groupId: Id; order: Id[] }
+  | { type: 'CLEAR_RESULT'; groupId: Id }
+  | { type: 'SET_GROUP_ARENA'; groupId: Id; arenaId: Id }
   | { type: 'SET_CURRENT_ROUND'; index: number }
   | { type: 'NEXT_ROUND' }
+  | { type: 'START_FINAL' }
+  | { type: 'RESEED_FINAL' }
+  | { type: 'SKIP_FINAL' }
   | { type: 'FINISH' }
   | { type: 'REOPEN' }
 
@@ -37,12 +42,17 @@ export function initialTournament(): Tournament {
     phase: 'setup',
     players: [],
     arenas: [],
-    settings: { groupSize: 4, roundCount: 4, byePoints: 'average', arenaLabel: 'Arena', seed: randomSeed() },
+    settings: { groupSize: 4, roundCount: 4, byePoints: 'average', arenaLabel: 'Arena', finalStage: 'none', seed: randomSeed() },
     rounds: [],
     currentRound: 0,
     createdAt: now,
     updatedAt: now,
   }
+}
+
+/** Fill in fields that older saved tournaments may lack. */
+export function normalize(t: Tournament): Tournament {
+  return { ...t, settings: { ...initialTournament().settings, ...t.settings } }
 }
 
 /** A round is locked once any of its groups has a result; locked rounds are never re-drawn. */
@@ -52,6 +62,14 @@ export function isLocked(round: Round): boolean {
 
 export function isComplete(round: Round): boolean {
   return round.groups.length > 0 && round.groups.every((g) => g.result !== undefined)
+}
+
+export function isFinalComplete(t: Tournament): boolean {
+  return !!t.final && t.final.groups.length > 0 && t.final.groups.every((g) => g.result !== undefined)
+}
+
+export function finalHasResults(t: Tournament): boolean {
+  return !!t.final && t.final.groups.some((g) => g.result !== undefined)
 }
 
 export function activePlayers(t: Tournament): Player[] {
@@ -101,6 +119,16 @@ export function validateSetup(t: Tournament): string[] {
     anames.add(n)
   }
   return [...new Set(problems)]
+}
+
+/** How many final groups the current setup would produce (0 = no final). */
+export function finalShape(t: Tournament): { groups: number; finalists: number } {
+  const k = t.settings.groupSize
+  const P = activePlayers(t).length
+  const A = activeArenas(t).length
+  if (t.settings.finalStage === 'none' || A < 1 || P < k) return { groups: 0, finalists: 0 }
+  const groups = t.settings.finalStage === 'top' ? 1 : Math.min(A, Math.floor(P / k))
+  return { groups, finalists: groups * k }
 }
 
 function touch(t: Tournament): Tournament {
@@ -162,6 +190,53 @@ export function regenerateUnlocked(t: Tournament, seed = randomSeed()): Tourname
   return touch({ ...t, rounds, currentRound, settings: { ...t.settings, seed } })
 }
 
+/**
+ * Seed the final stage from the group-stage standings. Each final group gets
+ * the active arena its members have played least (ties → arena order).
+ */
+export function buildFinal(t: Tournament): Final | null {
+  const { groups: G } = finalShape(t)
+  if (G < 1) return null
+  const k = t.settings.groupSize
+  const active = new Set(activePlayers(t).map((p) => p.id))
+  const seeded = computeStandings(t)
+    .map((r) => r.playerId)
+    .filter((id) => active.has(id))
+  const alias = arenaAlias(t.arenas)
+  const plays = new Map<string, number>() // `${player}:${arena}` → count
+  for (const r of t.rounds)
+    for (const g of r.groups) {
+      const arena = alias[g.arenaId] ?? g.arenaId
+      for (const pid of g.playerIds) plays.set(`${pid}:${arena}`, (plays.get(`${pid}:${arena}`) ?? 0) + 1)
+    }
+  const free = activeArenas(t).map((a) => a.id)
+  const groups: Group[] = []
+  for (let gi = 0; gi < G; gi++) {
+    const members = seeded.slice(gi * k, gi * k + k)
+    if (members.length < 2) break
+    let best = free[0]
+    let bestCost = Infinity
+    for (const a of free) {
+      const cost = members.reduce((sum, pid) => sum + (plays.get(`${pid}:${a}`) ?? 0), 0)
+      if (cost < bestCost) {
+        bestCost = cost
+        best = a
+      }
+    }
+    free.splice(free.indexOf(best), 1)
+    groups.push({ id: newId(), arenaId: best, playerIds: members })
+  }
+  return groups.length ? { groups, seededAt: Date.now() } : null
+}
+
+/** Group stage is over: move to the final if one is configured and possible, otherwise finish. */
+function finishGroupStage(t: Tournament): Tournament {
+  const final = buildFinal(t)
+  if (final) return touch({ ...t, phase: 'final', final })
+  const { final: _drop, ...rest } = t
+  return touch({ ...rest, phase: 'finished' })
+}
+
 function setupOnly(t: Tournament): boolean {
   return t.phase === 'setup'
 }
@@ -172,8 +247,19 @@ function afterRosterChange(t: Tournament): Tournament {
   return regenerateUnlocked(t)
 }
 
+function findGroup(t: Tournament, groupId: Id): Group | undefined {
+  for (const r of t.rounds) for (const g of r.groups) if (g.id === groupId) return g
+  return t.final?.groups.find((g) => g.id === groupId)
+}
+
+function mapGroup(t: Tournament, groupId: Id, fn: (g: Group) => Group): Tournament {
+  const rounds = t.rounds.map((r) => ({ ...r, groups: r.groups.map((g) => (g.id === groupId ? fn(g) : g)) }))
+  const final = t.final ? { ...t.final, groups: t.final.groups.map((g) => (g.id === groupId ? fn(g) : g)) } : undefined
+  return touch(final ? { ...t, rounds, final } : { ...t, rounds })
+}
+
 export function reducer(state: Tournament | null, action: Action): Tournament | null {
-  if (action.type === 'HYDRATE') return action.tournament
+  if (action.type === 'HYDRATE') return normalize(action.tournament)
   if (state === null) return state
   const t = state
 
@@ -182,7 +268,7 @@ export function reducer(state: Tournament | null, action: Action): Tournament | 
       return initialTournament()
 
     case 'IMPORT':
-      return touch({ ...action.tournament })
+      return touch(normalize(action.tournament))
 
     case 'SET_NAME':
       return touch({ ...t, name: action.name })
@@ -190,14 +276,18 @@ export function reducer(state: Tournament | null, action: Action): Tournament | 
     case 'UPDATE_SETTINGS': {
       const settings = { ...t.settings, ...action.settings }
       if (!setupOnly(t)) {
-        // Only round count / bye points / label may change mid-tournament.
+        // Group size is fixed once play has started; the final format is fixed once the final has started.
         settings.groupSize = t.settings.groupSize
+        if (t.phase !== 'running') settings.finalStage = t.settings.finalStage
         const next = touch({ ...t, settings })
         return action.settings.roundCount !== undefined && action.settings.roundCount !== t.settings.roundCount
           ? regenerateUnlocked(next)
           : next
       }
-      return touch({ ...t, settings, rounds: [] })
+      const affectsSchedule =
+        (action.settings.groupSize !== undefined && action.settings.groupSize !== t.settings.groupSize) ||
+        (action.settings.roundCount !== undefined && action.settings.roundCount !== t.settings.roundCount)
+      return touch(affectsSchedule ? { ...t, settings, rounds: [] } : { ...t, settings })
     }
 
     case 'ADD_PLAYERS':
@@ -264,11 +354,10 @@ export function reducer(state: Tournament | null, action: Action): Tournament | 
       const replacement: Arena = { id: newId(), name, active: true, replacesId: old.id }
       const arenas = [...t.arenas.map((a) => (a.id === old.id ? { ...a, active: false } : a)), replacement]
       // Every group that has not played yet moves to the replacement.
-      const rounds = t.rounds.map((r) => ({
-        ...r,
-        groups: r.groups.map((g) => (g.arenaId === old.id && !g.result ? { ...g, arenaId: replacement.id } : g)),
-      }))
-      return touch({ ...t, arenas, rounds })
+      const swap = (g: Group) => (g.arenaId === old.id && !g.result ? { ...g, arenaId: replacement.id } : g)
+      const rounds = t.rounds.map((r) => ({ ...r, groups: r.groups.map(swap) }))
+      const final = t.final ? { ...t.final, groups: t.final.groups.map(swap) } : undefined
+      return touch(final ? { ...t, arenas, rounds, final } : { ...t, arenas, rounds })
     }
 
     case 'GENERATE_SCHEDULE': {
@@ -288,35 +377,24 @@ export function reducer(state: Tournament | null, action: Action): Tournament | 
     }
 
     case 'SET_RESULT': {
-      const round = t.rounds[action.roundIndex]
-      const group = round?.groups.find((g) => g.id === action.groupId)
-      if (!round || !group) return t
+      const group = findGroup(t, action.groupId)
+      if (!group) return t
       const same =
         action.order.length === group.playerIds.length &&
         [...action.order].sort().join() === [...group.playerIds].sort().join()
       if (!same) return t
-      const rounds = t.rounds.map((r, i) =>
-        i !== action.roundIndex
-          ? r
-          : { ...r, groups: r.groups.map((g) => (g.id === action.groupId ? { ...g, result: action.order } : g)) },
-      )
-      return touch({ ...t, rounds })
+      return mapGroup(t, action.groupId, (g) => ({ ...g, result: action.order }))
     }
 
-    case 'CLEAR_RESULT': {
-      const rounds = t.rounds.map((r, i) =>
-        i !== action.roundIndex
-          ? r
-          : {
-              ...r,
-              groups: r.groups.map((g) => {
-                if (g.id !== action.groupId) return g
-                const { result: _drop, ...rest } = g
-                return rest
-              }),
-            },
-      )
-      return touch({ ...t, rounds })
+    case 'CLEAR_RESULT':
+      return mapGroup(t, action.groupId, (g) => {
+        const { result: _drop, ...rest } = g
+        return rest
+      })
+
+    case 'SET_GROUP_ARENA': {
+      if (!t.arenas.some((a) => a.id === action.arenaId && a.active)) return t
+      return mapGroup(t, action.groupId, (g) => (g.result ? g : { ...g, arenaId: action.arenaId }))
     }
 
     case 'SET_CURRENT_ROUND': {
@@ -325,15 +403,33 @@ export function reducer(state: Tournament | null, action: Action): Tournament | 
     }
 
     case 'NEXT_ROUND': {
-      if (t.currentRound >= t.rounds.length - 1) return touch({ ...t, phase: 'finished' })
+      if (t.phase !== 'running') return t
+      if (t.currentRound >= t.rounds.length - 1) return finishGroupStage(t)
       return touch({ ...t, currentRound: t.currentRound + 1 })
     }
 
-    case 'FINISH':
-      return touch({ ...t, phase: 'finished' })
+    case 'START_FINAL':
+      return t.phase === 'running' ? finishGroupStage(t) : t
+
+    case 'RESEED_FINAL': {
+      if (t.phase !== 'final' || finalHasResults(t)) return t
+      return finishGroupStage(t)
+    }
+
+    case 'SKIP_FINAL': {
+      if (t.phase !== 'final') return t
+      const { final: _drop, ...rest } = t
+      return touch({ ...rest, phase: 'finished' })
+    }
+
+    case 'FINISH': {
+      if (t.phase === 'final') return touch({ ...t, phase: 'finished' })
+      const { final: _drop, ...rest } = t
+      return touch({ ...rest, phase: 'finished' })
+    }
 
     case 'REOPEN':
-      return t.phase === 'finished' ? touch({ ...t, phase: 'running' }) : t
+      return t.phase === 'finished' ? touch({ ...t, phase: t.final ? 'final' : 'running' }) : t
 
     default:
       return t

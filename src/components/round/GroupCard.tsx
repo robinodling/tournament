@@ -7,9 +7,11 @@ interface Props {
   group: Group
   onClick?: () => void
   compact?: boolean
+  /** Final groups: show seeding order and no points. */
+  seeded?: boolean
 }
 
-export function GroupCard({ group, onClick, compact }: Props) {
+export function GroupCard({ group, onClick, compact, seeded }: Props) {
   const { player, arena } = useNames()
   const done = group.result !== undefined
   const order = group.result ?? group.playerIds
@@ -39,13 +41,17 @@ export function GroupCard({ group, onClick, compact }: Props) {
           <div key={pid} className="player-line">
             {done ? (
               <span className={`placement p${i + 1}`}>{ordinal(i + 1)}</span>
+            ) : seeded ? (
+              <span className="muted small" style={{ minWidth: '3.2em' }}>
+                seed {i + 1}
+              </span>
             ) : (
               <span className="muted small" style={{ minWidth: '1.2em' }}>
                 •
               </span>
             )}
             <span className="grow">{player(pid)}</span>
-            {done && <span className="pts">{pts(pointsForPlacement(i + 1, k))}</span>}
+            {done && !seeded && <span className="pts">{pts(pointsForPlacement(i + 1, k))}</span>}
           </div>
         ))}
       </div>

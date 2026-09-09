@@ -1,11 +1,14 @@
 import { useState } from 'react'
-import { computeStandings, formatPoints, standingsAsText } from '../../lib/scoring'
+import { tierName } from '../../lib/label'
+import { computeFinalRanking, formatPoints, standingsAsText } from '../../lib/scoring'
+import { GroupCard } from '../round/GroupCard'
 import { useTournament } from '../../state/TournamentContext'
 import { StandingsTable } from '../standings/StandingsTable'
 
 export function FinishedScreen() {
   const { t, dispatch } = useTournament()
-  const rows = computeStandings(t)
+  const { rows, decidedByFinal, finalists } = computeFinalRanking(t)
+  const finals = t.final?.groups ?? []
   const [copied, setCopied] = useState(false)
   const top = [rows[1], rows[0], rows[2]] // silver, gold, bronze layout
   const classes = ['second', 'first', 'third']
@@ -37,7 +40,25 @@ export function FinishedScreen() {
           )}
         </div>
       )}
+      {finals.length > 0 && (
+        <section className="section">
+          <h3 className="section-title">{finals.length > 1 ? 'Finals' : 'Final'}</h3>
+          <div className="schedule-groups">
+            {finals.map((g, i) => (
+              <div key={g.id} className="stack" style={{ gap: 4 }}>
+                <span className="muted small">{tierName(i, finals.length)}</span>
+                <GroupCard group={g} compact seeded />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       <StandingsTable rows={rows} />
+      <p className="hint">
+        {decidedByFinal
+          ? `Positions 1–${finalists} were decided by the final${finals.length > 1 ? 's' : ''}; points shown are from the group stage.`
+          : 'Ties are broken by most 1st places, then 2nd places, and so on.'}
+      </p>
       <div className="row">
         <button type="button" className="btn grow" onClick={copy}>
           {copied ? '✓ Copied' : 'Copy standings as text'}

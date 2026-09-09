@@ -80,7 +80,7 @@ export function RoundScreen() {
         </p>
       )}
 
-      <RankingSheet roundIndex={idx} group={editing} onClose={() => setEditing(null)} />
+      <RankingSheet context={`Round ${idx + 1}`} group={editing} onClose={() => setEditing(null)} />
     </div>
   )
 }
