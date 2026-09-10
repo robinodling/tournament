@@ -87,7 +87,8 @@ server-side by `database.rules.json`:
 - a room is readable by anyone who knows its 6-character code (~10⁹ combinations);
 - `state` is writable only by the anonymous identity that created the room (`adminUid`, written
   once);
-- `results/{groupId}` is writable by anyone with the code, with the shape and size validated.
+- `results/{groupId}` is writable by anyone with the code, with the shape and size validated;
+- `registrations/{uid}` is writable only by that identity (players joining from their own phone).
 
 The only secret Firebase has — the Admin SDK service-account key — is never used here.
 
@@ -101,9 +102,12 @@ The only secret Firebase has — the Admin SDK service-account key — is never 
 5. *Project settings → Your apps → Web* → copy the config into `src/lib/firebaseConfig.ts`.
 
 The Firebase client is loaded lazily, only when a room is used; without a config the feature
-is simply hidden. Rooms are created from *Manage → Live scoring*; players open the shared link
-(`…/tournament/?room=CODE`), pick their own name (or *Just watching*) and can then send results
-only for the groups and matches they play in. That gate is client-side — the organiser's app
+is simply hidden. Rooms are created from *Live scoring* (on the Setup page or under Manage);
+players open the shared link (`…/tournament/?room=CODE`). Before the start they can **join the
+roster** from their phone (the organiser's app adds them, linking to a pre-entered name if it
+matches); once the tournament runs, registered phones are recognised automatically and everyone
+else picks their name (or *Just watching*). Players can then send results only for the groups
+and matches they play in. That gate is client-side — the organiser's app
 validates every incoming result and can overrule it — which is plenty for friends and keeps the
 database rules simple.
 

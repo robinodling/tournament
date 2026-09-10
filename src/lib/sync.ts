@@ -3,7 +3,7 @@ import { getAuth, onAuthStateChanged, signInAnonymously } from 'firebase/auth'
 import { get, getDatabase, onValue, ref, serverTimestamp, set } from 'firebase/database'
 import type { Tournament } from '../types'
 import { firebaseConfig } from './firebaseConfig'
-import { newRoomCode, type RemoteResult } from './roomSync'
+import { newRoomCode, type Registration, type RemoteResult } from './roomSync'
 import { parseTournament } from './storage'
 
 /**
@@ -11,6 +11,7 @@ import { parseTournament } from './storage'
  *   rooms/{code}/adminUid           written once by the creator
  *   rooms/{code}/state              JSON string of the tournament, admin-only writes
  *   rooms/{code}/results/{groupId}  { order: JSON string, at, by } — anyone with the code
+ *   rooms/{code}/registrations/{uid} { name, at } — a player signing up from their own phone
  *
  * Everything is stored as JSON strings: the database drops empty arrays and turns
  * sparse arrays into objects, which would corrupt the tournament structure.
@@ -118,4 +119,31 @@ export async function subscribeResults(code: string, cb: (results: RemoteResult[
 export async function submitResult(code: string, groupId: string, order: string[]): Promise<void> {
   const uid = await ensureSignedIn()
   await set(ref(db(), `rooms/${code}/results/${groupId}`), { order: JSON.stringify(order), at: serverTimestamp(), by: uid })
+}
+
+export async function register(code: string, name: string): Promise<string> {
+  const uid = await ensureSignedIn()
+  await set(ref(db(), `rooms/${code}/registrations/${uid}`), { name: name.trim().slice(0, 40), at: serverTimestamp() })
+  return uid
+}
+
+export async function unregister(code: string): Promise<void> {
+  const uid = await ensureSignedIn()
+  await set(ref(db(), `rooms/${code}/registrations/${uid}`), null)
+}
+
+export async function subscribeRegistrations(code: string, cb: (regs: Registration[]) => void, onError: (e: Error) => void): Promise<() => void> {
+  await ensureSignedIn()
+  return onValue(
+    ref(db(), `rooms/${code}/registrations`),
+    (snap) => {
+      const out: Registration[] = []
+      snap.forEach((child) => {
+        const v = child.val() as { name?: unknown; at?: unknown }
+        if (typeof v?.name === 'string' && v.name.trim() && typeof v.at === 'number' && child.key) out.push({ uid: child.key, name: v.name.trim(), at: v.at })
+      })
+      cb(out.sort((a, b) => a.at - b.at))
+    },
+    (e) => onError(e),
+  )
 }

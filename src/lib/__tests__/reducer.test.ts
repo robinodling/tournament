@@ -343,4 +343,32 @@ describe('reducer', () => {
       expect(new Set(arenas).size).toBe(4)
     })
   })
+
+  describe('registrations from the live room', () => {
+    it('adds a new player, links a matching pre-entered name, renames on re-register', () => {
+      let t = run([{ type: 'ADD_PLAYERS', names: ['Robin', 'Anna'] }])
+      t = reducer(t, { type: 'REGISTER_PLAYER', uid: 'u1', name: 'Erik' })!
+      expect(t.players.map((p) => p.name)).toEqual(['Robin', 'Anna', 'Erik'])
+      expect(t.players[2].uid).toBe('u1')
+      // "robin" already exists without a uid → linked, not duplicated
+      t = reducer(t, { type: 'REGISTER_PLAYER', uid: 'u2', name: ' robin ' })!
+      expect(t.players).toHaveLength(3)
+      expect(t.players[0].uid).toBe('u2')
+      // same phone again with a new spelling → rename
+      t = reducer(t, { type: 'REGISTER_PLAYER', uid: 'u1', name: 'Erik S' })!
+      expect(t.players.map((p) => p.name)).toEqual(['Robin', 'Anna', 'Erik S'])
+      expect(t.players).toHaveLength(3)
+    })
+
+    it('pruning removes registered players who withdrew, only before the start', () => {
+      let t = run([{ type: 'ADD_PLAYERS', names: ['Anna'] }, { type: 'REGISTER_PLAYER', uid: 'u1', name: 'Erik' }, { type: 'REGISTER_PLAYER', uid: 'u2', name: 'Maja' }])
+      t = reducer(t, { type: 'PRUNE_REGISTERED', uids: ['u2'] })!
+      expect(t.players.map((p) => p.name)).toEqual(['Anna', 'Maja']) // Anna has no uid → untouched
+      t = run([{ type: 'REGISTER_PLAYER', uid: 'u3', name: 'Lisa' }, { type: 'REGISTER_PLAYER', uid: 'u4', name: 'Sara' }, { type: 'SET_ARENA_COUNT', count: 2 }, { type: 'START' }], t)
+      expect(t.phase).toBe('running')
+      const before = t.players.length
+      t = reducer(t, { type: 'PRUNE_REGISTERED', uids: [] })!
+      expect(t.players).toHaveLength(before)
+    })
+  })
 })

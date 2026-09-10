@@ -35,6 +35,8 @@ export type Action =
   | { type: 'REOPEN' }
   | { type: 'SET_ROOM'; room: Room }
   | { type: 'CLEAR_ROOM' }
+  | { type: 'REGISTER_PLAYER'; uid: string; name: string }
+  | { type: 'PRUNE_REGISTERED'; uids: string[] }
 
 export function initialTournament(): Tournament {
   const now = Date.now()
@@ -685,6 +687,28 @@ export function reducer(state: Tournament | null, action: Action): Tournament | 
 
     case 'SET_ROOM':
       return touch({ ...t, room: action.room })
+
+    case 'PRUNE_REGISTERED': {
+      // Registered players who withdrew before the start disappear from the roster again.
+      if (!setupOnly(t)) return t
+      const keep = new Set(action.uids)
+      const players = t.players.filter((p) => !p.uid || keep.has(p.uid))
+      return players.length === t.players.length ? t : afterRosterChange({ ...t, players })
+    }
+
+    case 'REGISTER_PLAYER': {
+      // A phone registered (or renamed itself) in the live room.
+      const name = action.name.trim().slice(0, 40)
+      if (!name) return t
+      const existing = t.players.find((p) => p.uid === action.uid)
+      if (existing) {
+        return existing.name === name ? t : touch({ ...t, players: t.players.map((p) => (p.id === existing.id ? { ...p, name } : p)) })
+      }
+      // Link to a pre-entered player with the same name instead of adding a duplicate.
+      const sameName = t.players.find((p) => !p.uid && p.name.trim().toLowerCase() === name.toLowerCase())
+      if (sameName) return touch({ ...t, players: t.players.map((p) => (p.id === sameName.id ? { ...p, uid: action.uid } : p)) })
+      return afterRosterChange({ ...t, players: [...t.players, { id: newId(), name, active: true, uid: action.uid }] })
+    }
 
     case 'CLEAR_ROOM': {
       const { room: _drop, ...rest } = t

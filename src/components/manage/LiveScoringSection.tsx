@@ -8,6 +8,9 @@ import { useRoomSyncStatus } from '../../state/useRoomSync'
 export function LiveScoringSection() {
   const { t, dispatch } = useTournament()
   const sync = useRoomSyncStatus()
+  const setup = t.phase === 'setup'
+  const pending = sync.registrations.filter((r) => !t.players.some((p) => p.uid === r.uid))
+  const joined = t.players.filter((p) => p.uid).length
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
@@ -59,8 +62,9 @@ export function LiveScoringSection() {
         ) : !t.room ? (
           <>
             <p className="hint small" style={{ margin: 0 }}>
-              Create a room and share its link: players see the schedule and standings live and can send their group's result. You stay in charge — every result
-              still lands in your app and can be corrected.
+              {setup
+                ? 'Create a room and share its link: players put themselves on the roster from their own phones, then follow the tournament live and send their own results.'
+                : "Create a room and share its link: players see the schedule and standings live and can send their group's result. You stay in charge — every result still lands in your app and can be corrected."}
             </p>
             <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void create()}>
               {busy ? 'Creating…' : 'Create room for players'}
@@ -78,6 +82,32 @@ export function LiveScoringSection() {
             <p className="hint small" style={{ margin: 0, overflowWrap: 'anywhere' }}>
               {roomLink(t.room.code)}
             </p>
+            {setup && (
+              <p className="hint small" style={{ margin: 0 }}>
+                {joined === 0 ? 'Nobody has joined via the link yet.' : `${joined} ${joined === 1 ? 'player has' : 'players have'} joined via the link — they appear in the player list above.`}
+              </p>
+            )}
+            {!setup && pending.length > 0 && (
+              <div className="stack">
+                <span className="small muted">Want to join:</span>
+                <div className="list">
+                  {pending.map((r) => (
+                    <div key={r.uid} className="list-item">
+                      <span className="grow">{r.name}</span>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() =>
+                          window.confirm(`Add ${r.name} to the tournament? Unplayed rounds will be re-drawn.`) && dispatch({ type: 'REGISTER_PLAYER', uid: r.uid, name: r.name })
+                        }
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="row wrap">
               <button type="button" className="btn btn-sm btn-primary" onClick={() => void share(roomLink(t.room!.code))}>
                 Share link

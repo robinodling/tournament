@@ -4,6 +4,8 @@ import type { Id } from '../../types'
 interface Item {
   id: Id
   name: string
+  /** Small marker shown after the name, e.g. "via link". */
+  badge?: string
 }
 
 interface Props {
@@ -47,6 +49,7 @@ export function NamedList({ items, placeholder, onRename, onRemove, onAdd }: Pro
                 {i + 1}
               </span>
               <input className="input grow" value={item.name} placeholder={placeholder} onChange={(e) => onRename(item.id, e.target.value)} aria-label={`${placeholder} ${i + 1}`} />
+              {item.badge && <span className="chip">{item.badge}</span>}
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => onRemove(item.id)} aria-label={`Remove ${item.name}`}>
                 ✕
               </button>

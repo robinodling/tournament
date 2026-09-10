@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { JoinScreen } from './components/viewer/JoinScreen'
 import { FinalScreen } from './components/final/FinalScreen'
 import { FinishedScreen } from './components/finished/FinishedScreen'
 import { RoundScreen } from './components/round/RoundScreen'
@@ -23,10 +24,25 @@ export function ViewerApp({ code }: { code: string }) {
   const [state, setState] = useState<State>({ status: 'connecting' })
   const [tab, setTab] = useState<Tab>('round')
   const [identity, setIdentity] = useState<ViewerIdentity | undefined>(() => loadViewerIdentity(code))
+  const [myUid, setMyUid] = useState<string | null>(null)
   const choose = (next: ViewerIdentity | undefined) => {
     saveViewerIdentity(code, next)
     setIdentity(next)
   }
+
+  // Our anonymous identity — lets a phone that registered skip "Who are you?".
+  useEffect(() => {
+    if (!syncConfigured) return
+    loadSync()
+      .then((s) => s.ensureSignedIn())
+      .then(setMyUid)
+      .catch(() => {})
+  }, [])
+  const registeredAs = state.status === 'live' && myUid ? state.t.players.find((p) => p.uid === myUid) : undefined
+  useEffect(() => {
+    if (identity === undefined && registeredAs && state.status === 'live' && state.t.phase !== 'setup') choose({ playerId: registeredAs.id })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [identity, registeredAs?.id, state.status])
 
   useEffect(() => {
     if (!syncConfigured) {
@@ -79,8 +95,11 @@ export function ViewerApp({ code }: { code: string }) {
   const t = state.t
   const roster = t.players.filter((p) => p.active).sort((a, b) => a.name.localeCompare(b.name))
   const claimed = identity?.playerId ? t.players.find((p) => p.id === identity.playerId) : undefined
+  if (t.phase === 'setup') return <JoinScreen code={code} t={t} myUid={myUid} />
+  // Registered phones are recognised automatically (effect above); otherwise ask.
+  if (identity === undefined && registeredAs) return null
   // Not chosen yet, or the claimed player left the tournament → ask again.
-  if (t.phase !== 'setup' && (identity === undefined || (identity.playerId !== null && !claimed))) {
+  if (identity === undefined || (identity.playerId !== null && !claimed)) {
     return (
       <div className="app">
         <header className="topbar">
@@ -118,20 +137,15 @@ export function ViewerApp({ code }: { code: string }) {
           <h1 className="topbar-title">{t.name}</h1>
           <span className="muted small" style={{ textAlign: 'right' }}>
             <span className="live-dot" aria-hidden /> Live · {code}
-            {t.phase !== 'setup' && (
-              <>
-                <br />
-                {claimed ? `You: ${claimed.name}` : 'Watching'}{' '}
-                <button type="button" className="link-btn" onClick={() => choose(undefined)}>
-                  change
-                </button>
-              </>
-            )}
+            <br />
+            {claimed ? `You: ${claimed.name}` : 'Watching'}{' '}
+            <button type="button" className="link-btn" onClick={() => choose(undefined)}>
+              change
+            </button>
           </span>
         </header>
         <main className="content">
-          {t.phase === 'setup' && <p className="hint">The organiser hasn't started the tournament yet.</p>}
-          {t.phase !== 'setup' && tab === 'round' && (t.phase === 'final' ? <FinalScreen /> : t.phase === 'finished' ? <FinishedScreen /> : <RoundScreen />)}
+          {tab === 'round' && (t.phase === 'final' ? <FinalScreen /> : t.phase === 'finished' ? <FinishedScreen /> : <RoundScreen />)}
           {tab === 'standings' && <StandingsScreen />}
           {tab === 'schedule' && <ScheduleScreen />}
         </main>

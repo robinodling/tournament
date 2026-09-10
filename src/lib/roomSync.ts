@@ -22,6 +22,12 @@ export function roomLink(code: string): string {
   return `${base}?room=${code}`
 }
 
+export interface Registration {
+  uid: string
+  name: string
+  at: number
+}
+
 export interface RemoteResult {
   groupId: Id
   order: Id[]

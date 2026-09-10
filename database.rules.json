@@ -19,7 +19,15 @@
             ".validate": "newData.hasChildren(['order', 'at', 'by']) && newData.child('order').isString() && newData.child('order').val().length < 4000 && newData.child('by').val() === auth.uid"
           }
         },
-        "$other": { ".validate": false }
+        "registrations": {
+          "$uid": {
+            ".write": "auth != null && $uid === auth.uid && root.child('rooms').child($code).child('adminUid').exists()",
+            ".validate": "newData.hasChildren(['name', 'at']) && newData.child('name').isString() && newData.child('name').val().length >= 1 && newData.child('name').val().length <= 40"
+          }
+        },
+        "$other": {
+          ".validate": false
+        }
       }
     }
   }

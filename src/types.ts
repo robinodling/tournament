@@ -5,6 +5,8 @@ export interface Player {
   name: string
   /** Inactive players keep their history but are not scheduled in unplayed rounds. */
   active: boolean
+  /** Anonymous Firebase identity of the phone that registered as this player (live rooms). */
+  uid?: string
 }
 
 export interface Arena {

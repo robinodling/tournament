@@ -7,6 +7,7 @@ import type { FinalStage } from '../../types'
 import { useNames, useTournament } from '../../state/TournamentContext'
 import { Stepper } from '../common/Stepper'
 import { InstallCard } from '../common/InstallCard'
+import { LiveScoringSection } from '../manage/LiveScoringSection'
 import { GroupCard } from '../round/GroupCard'
 import { NamedList } from './NamedList'
 import { QualitySummary } from './QualitySummary'
@@ -96,13 +97,15 @@ export function SetupScreen() {
         <h2 className="section-title">Players</h2>
         <Stepper label="How many players?" value={t.players.length} min={0} max={64} onChange={(n) => dispatch({ type: 'SET_PLAYER_COUNT', count: n })} />
         <NamedList
-          items={t.players}
+          items={t.players.map((p) => (p.uid ? { ...p, badge: '📱 via link' } : p))}
           placeholder="Player name"
           onRename={(id, name) => dispatch({ type: 'RENAME_PLAYER', id, name })}
           onRemove={(id) => dispatch({ type: 'REMOVE_PLAYER', id })}
           onAdd={(names) => dispatch({ type: 'ADD_PLAYERS', names })}
         />
       </section>
+
+      <LiveScoringSection />
 
       <section className="section">
         <h2 className="section-title">{label(2)}</h2>
