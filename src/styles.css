@@ -844,3 +844,7 @@ kbd {
   transform: translateX(20px);
   background: var(--ok);
 }
+
+.flow-note {
+  margin: 0 4px;
+}

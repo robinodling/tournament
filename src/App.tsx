@@ -7,6 +7,7 @@ import { RoundScreen } from './components/round/RoundScreen'
 import { ScheduleScreen } from './components/schedule/ScheduleScreen'
 import { SetupScreen } from './components/setup/SetupScreen'
 import { StandingsScreen } from './components/standings/StandingsScreen'
+import { activeRoundIndex, groupStageComplete } from './lib/flow'
 import { normalizeRoomCode } from './lib/roomSync'
 import { TournamentProvider, useTournament } from './state/TournamentContext'
 import { RoomSyncCtx, useRoomSync } from './state/useRoomSync'
@@ -56,7 +57,7 @@ function Shell() {
         <header className="topbar">
           <h1 className="topbar-title">{t.name}</h1>
           <span className="muted small" style={{ textAlign: 'right' }}>
-            {t.phase === 'running' ? `Round ${t.currentRound + 1} of ${t.rounds.length}` : t.phase === 'final' ? 'Final stage' : 'Finished'}
+            {t.phase === 'running' ? (groupStageComplete(t) ? 'Group stage done' : `Round ${activeRoundIndex(t) + 1} of ${t.rounds.length}`) : t.phase === 'final' ? 'Final stage' : 'Finished'}
             {t.room && (
               <>
                 <br />

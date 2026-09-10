@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { tierName } from '../../lib/label'
 import { isComplete, isLocked } from '../../state/reducer'
+import { groupFlow } from '../../lib/flow'
 import { useNames, useTournament } from '../../state/TournamentContext'
 import type { Group } from '../../types'
 import { GroupCard } from '../round/GroupCard'
@@ -8,7 +9,7 @@ import { RankingSheet } from '../round/RankingSheet'
 import { BracketRounds } from '../final/BracketRounds'
 
 export function ScheduleScreen() {
-  const { t, dispatch, readOnly } = useTournament()
+  const { t, readOnly } = useTournament()
   const { player } = useNames()
   const [editing, setEditing] = useState<{ group: Group; context: string; final?: boolean } | null>(null)
 
@@ -17,18 +18,13 @@ export function ScheduleScreen() {
       <h2>Schedule</h2>
       <p className="hint">{readOnly ? 'All rounds of the tournament.' : 'Tap any group to enter or correct its result.'}</p>
       {t.rounds.map((r, i) => {
-        const status = isComplete(r) ? 'Done' : isLocked(r) ? 'In progress' : i === t.currentRound && t.phase === 'running' ? 'Current' : 'Upcoming'
+        const ready = r.groups.some((g) => groupFlow(t, i, g).state === 'ready')
+        const status = isComplete(r) ? 'Done' : isLocked(r) || ready ? 'In progress' : 'Upcoming'
         return (
           <section key={i} className="schedule-round">
             <div className="status-line">
               <strong>Round {i + 1}</strong>
               <span className={`chip${status === 'Done' ? ' chip-ok' : ''}`}>{status}</span>
-              <span className="grow" />
-              {!readOnly && t.phase === 'running' && i !== t.currentRound && (
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => dispatch({ type: 'SET_CURRENT_ROUND', index: i })}>
-                  Go to round
-                </button>
-              )}
             </div>
             <div className="schedule-groups">
               {r.groups.map((g) => (

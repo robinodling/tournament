@@ -51,9 +51,10 @@ describe('App', () => {
     for (let round = 1; round <= 4; round++) {
       expect(screen.getByText(`Round ${round}`, { selector: 'h2' })).toBeTruthy()
       enterResultsForCurrentRound()
-      expect(screen.getAllByText('✓ Done')).toHaveLength(2)
-      fireEvent.click(screen.getByText(round === 4 ? '🏁 Finish tournament' : 'Next round →'))
+      // the view follows the flow: once a round is done the next one is shown automatically
     }
+    expect(screen.getAllByText('✓ Done')).toHaveLength(2)
+    fireEvent.click(screen.getByText('🏁 Finish tournament'))
 
     await screen.findByText('Final results')
     // every round hands out (4+3+2+1) points per group × 2 groups → 80 in total
@@ -77,7 +78,6 @@ describe('App', () => {
   it('removing a player mid-tournament re-draws only unplayed rounds', async () => {
     await setupEightPlayers()
     enterResultsForCurrentRound()
-    fireEvent.click(screen.getByText('Next round →'))
     fireEvent.click(screen.getByText('Manage'))
     const removeButtons = screen.getAllByText('Remove').filter((b) => b.closest('.list-item')?.querySelector('input')?.getAttribute('aria-label')?.startsWith('Player '))
     fireEvent.click(removeButtons[0])
