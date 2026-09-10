@@ -1,6 +1,6 @@
 import { newId } from '../lib/id'
 import { mulberry32, randomSeed, shuffle } from '../lib/rng'
-import { generateRounds, roundShape } from '../lib/scheduler'
+import { generateRounds, groupSizes, roundShape } from '../lib/scheduler'
 import { computeStandings } from '../lib/scoring'
 import type { Arena, Bracket, Final, Group, Id, Player, Room, Round, Settings, Tournament } from '../types'
 
@@ -45,7 +45,7 @@ export function initialTournament(): Tournament {
     phase: 'setup',
     players: [],
     arenas: [],
-    settings: { groupSize: 4, roundCount: 4, byePoints: 'average', arenaLabel: 'Arena', finalStage: 'none', bracketSize: 0, seed: randomSeed() },
+    settings: { groupSize: 4, roundCount: 4, byePoints: 'average', arenaLabel: 'Arena', finalStage: 'none', bracketSize: 0, unevenGroups: true, seed: randomSeed() },
     rounds: [],
     currentRound: 0,
     createdAt: now,
@@ -128,7 +128,8 @@ export function validateSetup(t: Tournament): string[] {
   const label = t.settings.arenaLabel.toLowerCase()
   if (groupSize < 2) problems.push('Group size must be at least 2.')
   if (players.length < 2) problems.push('Add at least 2 players.')
-  else if (players.length < groupSize) problems.push(`Need at least ${groupSize} players for groups of ${groupSize}.`)
+  else if (groupSizes(players.length, Math.max(arenas.length, 1), groupSize, t.settings.unevenGroups).length === 0)
+    problems.push(`Need at least ${t.settings.unevenGroups && groupSize >= 3 ? groupSize - 1 : groupSize} players for groups of ${groupSize}.`)
   if (arenas.length < 1) problems.push(`Add at least one ${label}.`)
   if (roundCount < 1) problems.push('Play at least one round.')
   const names = new Set<string>()
@@ -233,6 +234,7 @@ export function regenerateUnlocked(t: Tournament, seed = randomSeed()): Tourname
         roundsToGenerate: toGenerate,
         history: locked,
         arenaAlias: arenaAlias(t.arenas),
+        allowUneven: t.settings.unevenGroups,
         seed,
       })
     } catch {
@@ -504,8 +506,9 @@ export function reducer(state: Tournament | null, action: Action): Tournament | 
     case 'UPDATE_SETTINGS': {
       const settings = { ...t.settings, ...action.settings }
       if (!setupOnly(t)) {
-        // Group size is fixed once play has started; the final format is fixed once the final has started.
+        // Group size and evenness are fixed once play has started; the final format once the final has started.
         settings.groupSize = t.settings.groupSize
+        settings.unevenGroups = t.settings.unevenGroups
         if (t.phase !== 'running') {
           settings.finalStage = t.settings.finalStage
           settings.bracketSize = t.settings.bracketSize
@@ -517,7 +520,8 @@ export function reducer(state: Tournament | null, action: Action): Tournament | 
       }
       const affectsSchedule =
         (action.settings.groupSize !== undefined && action.settings.groupSize !== t.settings.groupSize) ||
-        (action.settings.roundCount !== undefined && action.settings.roundCount !== t.settings.roundCount)
+        (action.settings.roundCount !== undefined && action.settings.roundCount !== t.settings.roundCount) ||
+        (action.settings.unevenGroups !== undefined && action.settings.unevenGroups !== t.settings.unevenGroups)
       return touch(affectsSchedule ? { ...t, settings, rounds: [] } : { ...t, settings })
     }
 
@@ -694,5 +698,5 @@ export function reducer(state: Tournament | null, action: Action): Tournament | 
 
 /** Human-readable summary of the per-round shape for the current setup. */
 export function shapeSummary(t: Tournament) {
-  return roundShape(activePlayers(t).length, activeArenas(t).length, t.settings.groupSize)
+  return roundShape(activePlayers(t).length, activeArenas(t).length, t.settings.groupSize, t.settings.unevenGroups)
 }

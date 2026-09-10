@@ -195,6 +195,25 @@ export async function loadBackup(key: number): Promise<Tournament | null> {
   return (await idbGet<Tournament>(BACKUP_STORE, key)) ?? null
 }
 
+export async function deleteBackup(key: number): Promise<void> {
+  await idbDelete(BACKUP_STORE, key)
+}
+
+/** Remove every backup except the ones belonging to `keepTournamentId` (the live tournament). */
+export async function deleteBackups(keepTournamentId?: string): Promise<number> {
+  const keys = (await idbKeys(BACKUP_STORE)).map(Number)
+  let removed = 0
+  for (const key of keys) {
+    if (keepTournamentId) {
+      const t = await idbGet<Tournament>(BACKUP_STORE, key)
+      if (t?.id === keepTournamentId) continue
+    }
+    await idbDelete(BACKUP_STORE, key)
+    removed++
+  }
+  return removed
+}
+
 export async function requestPersistentStorage(): Promise<boolean | null> {
   try {
     if (!navigator.storage?.persist) return null

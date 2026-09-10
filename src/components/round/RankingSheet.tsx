@@ -70,7 +70,7 @@ export function RankingSheet({ context, group, showPoints = true, onClose }: Pro
             <div key={id} className="ranked-item">
               <span className={`placement p${i + 1}`}>{ordinal(i + 1)}</span>
               <span className="grow">{player(id)}</span>
-              {showPoints && <span className="pts">{pts(pointsForPlacement(i + 1, k))}</span>}
+              {showPoints && <span className="pts">{pts(pointsForPlacement(i + 1, k, t.settings.groupSize))}</span>}
               {i === order.length - 1 && (
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOrder(order.slice(0, -1))} aria-label={`Undo ${player(id)}`}>
                   ↩︁ Undo

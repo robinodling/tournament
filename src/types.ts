@@ -48,6 +48,8 @@ export interface Settings {
   finalStage: FinalStage
   /** Bracket entrants cap: 0 = everyone, otherwise 4 / 8 / 16 top seeds. */
   bracketSize: number
+  /** Allow some groups to be one player smaller so nobody sits out (points are scaled). */
+  unevenGroups: boolean
   seed: number
 }
 

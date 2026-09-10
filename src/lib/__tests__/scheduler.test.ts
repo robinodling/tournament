@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeSchedule, generateRounds, minRoundsForFullCoverage, roundShape, suggestRounds } from '../scheduler'
+import { describeSchedule, generateRounds, groupSizes, minRoundsForFullCoverage, roundShape, suggestRounds } from '../scheduler'
 import type { Arena, Player, Round } from '../../types'
 
 const ids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i + 1}`)
@@ -10,12 +10,12 @@ function mk(P: number, A: number) {
   return { players, arenas }
 }
 
-function assertInvariants(rounds: Round[], playerIds: string[], arenaIds: string[], k: number) {
-  const shape = roundShape(playerIds.length, arenaIds.length, k)
+function assertInvariants(rounds: Round[], playerIds: string[], arenaIds: string[], k: number, allowUneven = true) {
+  const shape = roundShape(playerIds.length, arenaIds.length, k, allowUneven)
   for (const r of rounds) {
     expect(r.groups.length).toBe(shape.groups)
+    expect(r.groups.map((g) => g.playerIds.length).sort()).toEqual([...shape.sizes].sort())
     for (const g of r.groups) {
-      expect(g.playerIds.length).toBe(k)
       expect(arenaIds).toContain(g.arenaId)
     }
     const arenasUsed = r.groups.map((g) => g.arenaId)
@@ -55,12 +55,39 @@ describe('generateRounds', () => {
     }
   })
 
-  it('7 players / 4 arenas / groups of 4: byes rotate fairly', () => {
+  it('7 players / 4 arenas / groups of 4: a 4 + 3 split means nobody sits out and 4 rounds cover every arena once', () => {
     const { players, arenas } = mk(7, 4)
     const pid = players.map((p) => p.id)
     const aid = arenas.map((a) => a.id)
-    const rounds = generateRounds({ playerIds: pid, arenaIds: aid, groupSize: 4, roundsToGenerate: 7, history: [], seed: 5 })
+    expect(groupSizes(7, 4, 4)).toEqual([4, 3])
+    const rounds = generateRounds({ playerIds: pid, arenaIds: aid, groupSize: 4, roundsToGenerate: 4, history: [], seed: 5 })
     assertInvariants(rounds, pid, aid, 4)
+    const q = describeSchedule({ players, arenas, rounds })
+    expect(q.byesMax).toBe(0)
+    expect(q.everyoneAllArenasOnce).toBe(true)
+    // 4 rounds × 3 seats in the small group = 12 over 7 players (cannot be perfectly even with full coverage)
+    const small = new Map(pid.map((id) => [id, 0]))
+    for (const r of rounds) for (const g of r.groups) if (g.playerIds.length < 4) for (const id of g.playerIds) small.set(id, small.get(id)! + 1)
+    expect([...small.values()].reduce((a, b) => a + b, 0)).toBe(12)
+  })
+
+  it('group sizes: uneven when it helps, byes otherwise', () => {
+    expect(groupSizes(8, 4, 4)).toEqual([4, 4])
+    expect(groupSizes(6, 4, 4)).toEqual([3, 3])
+    expect(groupSizes(9, 4, 4)).toEqual([3, 3, 3])
+    expect(groupSizes(11, 4, 4)).toEqual([4, 4, 3])
+    expect(groupSizes(5, 4, 4)).toEqual([4]) // 3 + 2 would be too small → one full group, one bye
+    expect(groupSizes(9, 2, 4)).toEqual([4, 4]) // arena-limited: 8 play, 1 sits out
+    expect(groupSizes(7, 4, 2)).toEqual([2, 2, 2]) // head-to-head never uneven
+    expect(groupSizes(7, 4, 4, false)).toEqual([4])
+  })
+
+  it('7 players / 4 arenas / groups of 4 with uneven groups off: byes rotate fairly', () => {
+    const { players, arenas } = mk(7, 4)
+    const pid = players.map((p) => p.id)
+    const aid = arenas.map((a) => a.id)
+    const rounds = generateRounds({ playerIds: pid, arenaIds: aid, groupSize: 4, roundsToGenerate: 7, history: [], allowUneven: false, seed: 5 })
+    assertInvariants(rounds, pid, aid, 4, false)
     const q = describeSchedule({ players, arenas, rounds })
     // 3 byes per round × 7 rounds = 21 byes over 7 players → exactly 3 each
     expect(q.byesMin).toBe(3)
@@ -118,21 +145,27 @@ describe('generateRounds', () => {
   })
 
   it('throws when no group can be formed', () => {
-    expect(() => generateRounds({ playerIds: ['p1', 'p2', 'p3'], arenaIds: ['a1'], groupSize: 4, roundsToGenerate: 1, history: [], seed: 1 })).toThrow()
+    expect(() => generateRounds({ playerIds: ['p1', 'p2'], arenaIds: ['a1'], groupSize: 4, roundsToGenerate: 1, history: [], seed: 1 })).toThrow()
+    expect(() => generateRounds({ playerIds: ['p1', 'p2', 'p3'], arenaIds: ['a1'], groupSize: 4, roundsToGenerate: 1, history: [], allowUneven: false, seed: 1 })).toThrow()
+    // …but three players may form a group of three when uneven groups are allowed
+    expect(generateRounds({ playerIds: ['p1', 'p2', 'p3'], arenaIds: ['a1'], groupSize: 4, roundsToGenerate: 1, history: [], seed: 1 })[0].groups[0].playerIds).toHaveLength(3)
   })
 
   it('suggests the fewest rounds for everyone to play every arena', () => {
     expect(minRoundsForFullCoverage(8, 4, 4)).toBe(4)
     expect(minRoundsForFullCoverage(8, 4, 2)).toBe(4)
-    // 7 players: every machine must host two groups of 4 to see all 7 players → 4 machines × 2 = 8
-    expect(minRoundsForFullCoverage(7, 4, 4)).toBe(8)
+    // 7 players with a 4 + 3 split: two machines per round, everyone once → 4
+    expect(minRoundsForFullCoverage(7, 4, 4)).toBe(4)
+    // …but with strict groups of 4 every machine must host two groups to see all 7 → 4 machines × 2 = 8
+    expect(minRoundsForFullCoverage(7, 4, 4, false)).toBe(8)
     expect(minRoundsForFullCoverage(12, 2, 4)).toBe(3)
-    expect(minRoundsForFullCoverage(3, 2, 4)).toBeNull()
+    expect(minRoundsForFullCoverage(3, 2, 4)).toBe(2) // one group of 3 visits each of the two arenas
+    expect(minRoundsForFullCoverage(1, 2, 4)).toBeNull()
 
     expect(suggestRounds(ids('p', 8), ids('a', 4), 4)).toEqual({ rounds: 4, verified: true, exact: true })
     expect(suggestRounds(ids('p', 8), ids('a', 4), 2)).toEqual({ rounds: 4, verified: true, exact: true })
-    const seven = suggestRounds(ids('p', 7), ids('a', 4), 4)!
-    expect(seven).toEqual({ rounds: 8, verified: true, exact: false })
+    expect(suggestRounds(ids('p', 7), ids('a', 4), 4)).toEqual({ rounds: 4, verified: true, exact: true })
+    expect(suggestRounds(ids('p', 7), ids('a', 4), 4, false)).toEqual({ rounds: 8, verified: true, exact: false })
     const twelve = suggestRounds(ids('p', 12), ids('a', 2), 4)!
     expect(twelve.verified).toBe(true)
     expect(twelve.rounds).toBe(3)

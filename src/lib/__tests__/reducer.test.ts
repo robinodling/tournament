@@ -39,8 +39,8 @@ describe('reducer', () => {
   })
 
   it('validation flags missing players / arenas', () => {
-    const t = run([{ type: 'SET_PLAYER_COUNT', count: 3 }])
-    expect(validateSetup(t).join(' ')).toMatch(/at least 4 players/)
+    const t = run([{ type: 'SET_PLAYER_COUNT', count: 2 }])
+    expect(validateSetup(t).join(' ')).toMatch(/at least 3 players/) // groups of 4 may shrink to 3, not to 2
     expect(validateSetup(t).join(' ')).toMatch(/at least one arena/)
     expect(reducer(t, { type: 'GENERATE_SCHEDULE' })!.rounds).toHaveLength(0)
   })
@@ -81,8 +81,8 @@ describe('reducer', () => {
     expect(t.rounds[1]).toBe(lockedBefore[1])
     for (const r of t.rounds.slice(2)) {
       expect(r.groups.flatMap((g) => g.playerIds)).not.toContain(gone.id)
-      expect(r.groups).toHaveLength(1) // 7 players → one group of 4, 3 byes
-      expect(r.byePlayerIds).toHaveLength(3)
+      expect(r.groups.map((g) => g.playerIds.length).sort()).toEqual([3, 4]) // 7 players → 4 + 3, nobody sits out
+      expect(r.byePlayerIds).toHaveLength(0)
     }
     expect(t.currentRound).toBe(2)
   })

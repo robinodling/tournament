@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { listBackups, loadBackup, parseTournament, type BackupMeta } from '../../lib/storage'
+import { deleteBackup, deleteBackups, listBackups, loadBackup, parseTournament, type BackupMeta } from '../../lib/storage'
 import { useTournament } from '../../state/TournamentContext'
 
 /** Import a JSON export or restore one of the automatic backups. */
@@ -15,6 +15,20 @@ export function RestoreSection() {
   }, [open, t.updatedAt])
 
   const others = backups.filter((b) => b.tournamentId !== t.id || t.phase === 'setup')
+  const refresh = () => listBackups().then(setBackups)
+
+  const remove = async (b: BackupMeta) => {
+    if (!window.confirm(`Delete this backup of "${b.name}" from ${new Date(b.savedAt).toLocaleString()}?`)) return
+    await deleteBackup(b.key)
+    await refresh()
+  }
+
+  const removeAll = async () => {
+    const keepCurrent = t.phase !== 'setup'
+    if (!window.confirm(keepCurrent ? 'Delete all backups of earlier tournaments? Backups of the current one are kept.' : 'Delete all backups on this device?')) return
+    await deleteBackups(keepCurrent ? t.id : undefined)
+    await refresh()
+  }
 
   const importFile = async (file: File) => {
     try {
@@ -51,7 +65,7 @@ export function RestoreSection() {
           </div>
           {error && <p className="problem">{error}</p>}
           {others.length === 0 ? (
-            <p className="hint">No earlier backups on this device.</p>
+            <p className="hint">No earlier backups on this device. Backups are written automatically on every change (the last 40 are kept).</p>
           ) : (
             <div className="list">
               {others.slice(0, 15).map((b) => (
@@ -67,9 +81,17 @@ export function RestoreSection() {
                   <button type="button" className="btn btn-sm" onClick={() => restore(b)}>
                     Restore
                   </button>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => remove(b)} aria-label={`Delete backup of ${b.name}`}>
+                    🗑
+                  </button>
                 </div>
               ))}
             </div>
+          )}
+          {others.length > 0 && (
+            <button type="button" className="btn btn-danger btn-sm" onClick={removeAll}>
+              Delete {others.length === 1 ? 'this backup' : `all ${others.length} backups`}
+            </button>
           )}
         </div>
       )}

@@ -83,8 +83,9 @@ describe('App', () => {
     fireEvent.click(removeButtons[0])
     expect(screen.getByText('Bring back')).toBeTruthy()
     fireEvent.click(screen.getByText('Round'))
-    // 7 active players → one group of 4 plus 3 sitting out
-    expect(screen.getByText('Sitting out this round')).toBeTruthy()
+    // 7 active players → a group of 4 and a group of 3, nobody sitting out
+    expect(screen.queryByText('Sitting out this round')).toBeNull()
+    expect(screen.getAllByText('Tap to enter result')).toHaveLength(2)
     fireEvent.click(screen.getByText('Schedule'))
     expect(screen.getByText('Done')).toBeTruthy() // round 1 kept
   })

@@ -27,6 +27,8 @@ export interface ScheduleInput {
   history: Round[]
   /** Map from a replaced arena id to the arena that inherits its history. */
   arenaAlias?: Record<Id, Id>
+  /** Allow groups one player smaller than `groupSize` so nobody has to sit out (default true). */
+  allowUneven?: boolean
   seed: number
 }
 
@@ -34,6 +36,8 @@ const W_ARENA = 10
 const W_MATES = 1
 const W_BYES = 20
 const W_USAGE = 1
+/** Even out who ends up in a smaller-than-normal group. */
+const W_SMALL = 2
 
 const RESTARTS = 40
 const ITERATIONS = 300
@@ -54,28 +58,33 @@ class Stats {
   readonly mates: Int32Array // player * P + player
   readonly byes: Int32Array
   readonly usage: Int32Array
+  readonly small: Int32Array // times in a group smaller than k
 
   constructor(
     readonly P: number,
     readonly A: number,
+    readonly k: number,
     src?: Stats,
   ) {
     this.count = src ? src.count.slice() : new Int32Array(P * A)
     this.mates = src ? src.mates.slice() : new Int32Array(P * P)
     this.byes = src ? src.byes.slice() : new Int32Array(P)
     this.usage = src ? src.usage.slice() : new Int32Array(A)
+    this.small = src ? src.small.slice() : new Int32Array(P)
   }
 
   clone(): Stats {
-    return new Stats(this.P, this.A, this)
+    return new Stats(this.P, this.A, this.k, this)
   }
 
   addRound(d: Draft): void {
     for (const g of d.groups) {
       this.usage[g.arena]++
+      const isSmall = g.players.length < this.k
       for (let i = 0; i < g.players.length; i++) {
         const p = g.players[i]
         this.count[p * this.A + g.arena]++
+        if (isSmall) this.small[p]++
         for (let j = i + 1; j < g.players.length; j++) {
           const q = g.players[j]
           this.mates[p * this.P + q]++
@@ -96,6 +105,7 @@ class Stats {
       }
     for (let i = 0; i < this.P; i++) s += W_BYES * this.byes[i] * this.byes[i]
     for (let i = 0; i < this.A; i++) s += W_USAGE * this.usage[i] * this.usage[i]
+    for (let i = 0; i < this.P; i++) s += W_SMALL * this.small[i] * this.small[i]
     return s
   }
 
@@ -104,9 +114,11 @@ class Stats {
     let s = 0
     for (const g of d.groups) {
       s += W_USAGE * (2 * this.usage[g.arena] + 1)
+      const isSmall = g.players.length < this.k
       for (let i = 0; i < g.players.length; i++) {
         const p = g.players[i]
         s += W_ARENA * (2 * this.count[p * this.A + g.arena] + 1)
+        if (isSmall) s += W_SMALL * (2 * this.small[p] + 1)
         for (let j = i + 1; j < g.players.length; j++) {
           s += W_MATES * (2 * this.mates[p * this.P + g.players[j]] + 1)
         }
@@ -211,13 +223,15 @@ function chooseByes(P: number, byeCount: number, base: Stats, rng: Rng): { byes:
   return { byes: order.slice(0, byeCount).sort((a, b) => a - b), playing: order.slice(byeCount) }
 }
 
-/** Random partition, then each group takes the free arena its members have played least. */
-function constructRandom(playing: number[], G: number, k: number, base: Stats, rng: Rng, byes: number[]): Draft {
+/** Random partition into the given sizes, then each group takes the free arena its members have played least. */
+function constructRandom(playing: number[], sizes: number[], base: Stats, rng: Rng, byes: number[]): Draft {
   const players = shuffle(playing, rng)
   const groups: Draft['groups'] = []
   const used = new Set<number>()
-  for (let g = 0; g < G; g++) {
-    const members = players.slice(g * k, (g + 1) * k)
+  let offset = 0
+  for (const size of sizes) {
+    const members = players.slice(offset, offset + size)
+    offset += size
     let bestArena = -1
     let bestCost = Infinity
     for (const a of shuffle([...Array(base.A).keys()], rng)) {
@@ -236,19 +250,22 @@ function constructRandom(playing: number[], G: number, k: number, base: Stats, r
   return { groups, byes }
 }
 
-/** Pick the least-used arenas, then fill each with the players who have played it least. */
-function constructArenaFirst(playing: number[], G: number, k: number, base: Stats, rng: Rng, byes: number[]): Draft {
+/** Pick the least-used arenas, then fill each with the players who have played it least (smaller groups get those least often in a small group). */
+function constructArenaFirst(playing: number[], sizes: number[], base: Stats, rng: Rng, byes: number[]): Draft {
   const arenas = shuffle([...Array(base.A).keys()], rng)
     .sort((a, b) => base.usage[a] - base.usage[b])
-    .slice(0, G)
+    .slice(0, sizes.length)
   const pool = new Set(playing)
   const groups: Draft['groups'] = []
-  for (const a of arenas) {
-    const ranked = shuffle([...pool], rng).sort((p, q) => base.count[p * base.A + a] - base.count[q * base.A + a])
-    const members = ranked.slice(0, k)
+  arenas.forEach((a, gi) => {
+    const size = sizes[gi]
+    const ranked = shuffle([...pool], rng).sort(
+      (p, q) => base.count[p * base.A + a] - base.count[q * base.A + a] || (size < base.k ? base.small[p] - base.small[q] : 0),
+    )
+    const members = ranked.slice(0, size)
     for (const p of members) pool.delete(p)
     groups.push({ arena: a, players: members })
-  }
+  })
   return { groups, byes }
 }
 
@@ -273,18 +290,14 @@ function hillClimb(start: Draft, base: Stats, rng: Rng): { draft: Draft; score: 
   return { draft: best, score: bestScore }
 }
 
-function generateOne(P: number, k: number, base: Stats, rng: Rng): Draft {
-  const G = Math.min(Math.floor(P / k), base.A)
-  if (G < 1) throw new Error('Not enough players or arenas for a single group')
-  const byeCount = P - G * k
+function generateOne(P: number, sizes: number[], base: Stats, rng: Rng): Draft {
+  if (sizes.length < 1) throw new Error('Not enough players or arenas for a single group')
+  const byeCount = P - sizes.reduce((a, b) => a + b, 0)
   let best: Draft | null = null
   let bestScore = Infinity
   for (let r = 0; r < RESTARTS; r++) {
     const { byes, playing } = chooseByes(P, byeCount, base, rng)
-    const start =
-      r % 2 === 0
-        ? constructRandom(playing, G, k, base, rng, byes)
-        : constructArenaFirst(playing, G, k, base, rng, byes)
+    const start = r % 2 === 0 ? constructRandom(playing, sizes, base, rng, byes) : constructArenaFirst(playing, sizes, base, rng, byes)
     const { draft, score } = hillClimb(start, base, rng)
     if (score < bestScore) {
       bestScore = score
@@ -298,7 +311,7 @@ function generateOne(P: number, k: number, base: Stats, rng: Rng): Draft {
  * Large-neighbourhood step: rebuild one round at a time, treating every other
  * round as fixed history. Repeats until a full pass makes no improvement.
  */
-function reoptimiseRounds(drafts: Draft[], base: Stats, P: number, k: number, rng: Rng): Draft[] {
+function reoptimiseRounds(drafts: Draft[], base: Stats, P: number, sizes: number[], rng: Rng): Draft[] {
   let current = drafts.map(cloneDraft)
   let currentScore = totalScore(current, base)
   for (let pass = 0; pass < 6; pass++) {
@@ -308,7 +321,7 @@ function reoptimiseRounds(drafts: Draft[], base: Stats, P: number, k: number, rn
       current.forEach((d, j) => {
         if (j !== i) others.addRound(d)
       })
-      const rebuilt = generateOne(P, k, others, rng)
+      const rebuilt = generateOne(P, sizes, others, rng)
       const next = current.slice()
       next[i] = rebuilt
       const s = totalScore(next, base)
@@ -374,13 +387,14 @@ export function generateRounds(input: ScheduleInput): Round[] {
   const A = arenaIds.length
   if (roundsToGenerate <= 0) return []
   if (k < 2) throw new Error('Group size must be at least 2')
-  if (P < k || A < 1) throw new Error('Not enough players or arenas for a single group')
+  const sizes = groupSizes(P, A, k, input.allowUneven ?? true)
+  if (sizes.length < 1) throw new Error('Not enough players or arenas for a single group')
 
   const pIndex = new Map(playerIds.map((id, i) => [id, i]))
   const aIndex = new Map(arenaIds.map((id, i) => [id, i]))
   const resolveArena = (id: Id): number | undefined => aIndex.get(alias[id] ?? id)
 
-  const base = new Stats(P, A)
+  const base = new Stats(P, A, k)
   for (const round of history) {
     const draft: Draft = { groups: [], byes: [] }
     for (const g of round.groups) {
@@ -408,11 +422,11 @@ export function generateRounds(input: ScheduleInput): Round[] {
     const drafts: Draft[] = []
     const running = base.clone()
     for (let r = 0; r < roundsToGenerate; r++) {
-      const d = generateOne(P, k, running, rng)
+      const d = generateOne(P, sizes, running, rng)
       running.addRound(d)
       drafts.push(d)
     }
-    const refined = reoptimiseRounds(refine(drafts, base, rng), base, P, k, rng)
+    const refined = reoptimiseRounds(refine(drafts, base, rng), base, P, sizes, rng)
     const score = totalScore(refined, base)
     if (score < bestScore) {
       bestScore = score
@@ -430,10 +444,32 @@ export function generateRounds(input: ScheduleInput): Round[] {
   }))
 }
 
-/** How many groups play per round, and how many players sit out. */
-export function roundShape(playerCount: number, arenaCount: number, groupSize: number) {
-  const groups = groupSize >= 2 ? Math.min(Math.floor(playerCount / groupSize), arenaCount) : 0
-  return { groups, playing: groups * groupSize, byes: Math.max(0, playerCount - groups * groupSize) }
+/**
+ * Group sizes for one round. With `allowUneven`, groups may be one player
+ * smaller than `groupSize` so that nobody sits out (7 players, groups of 4 →
+ * 4 + 3); when that does not work out, full-size groups are used and the
+ * leftover players get a bye. Never more groups than arenas.
+ */
+export function groupSizes(playerCount: number, arenaCount: number, groupSize: number, allowUneven = true): number[] {
+  if (groupSize < 2 || arenaCount < 1 || playerCount < 2) return []
+  if (allowUneven && groupSize >= 3) {
+    for (let g = Math.min(Math.ceil(playerCount / groupSize), arenaCount); g >= 1; g--) {
+      const playing = Math.min(playerCount, g * groupSize)
+      const base = Math.floor(playing / g)
+      const extra = playing % g
+      const sizes = Array.from({ length: g }, (_, i) => base + (i < extra ? 1 : 0))
+      if (sizes.every((n) => n >= groupSize - 1 && n <= groupSize)) return sizes
+    }
+  }
+  const g = Math.min(Math.floor(playerCount / groupSize), arenaCount)
+  return Array<number>(g).fill(groupSize)
+}
+
+/** How many groups play per round (and their sizes), and how many players sit out. */
+export function roundShape(playerCount: number, arenaCount: number, groupSize: number, allowUneven = true) {
+  const sizes = groupSizes(playerCount, arenaCount, groupSize, allowUneven)
+  const playing = sizes.reduce((a, b) => a + b, 0)
+  return { groups: sizes.length, sizes, playing, byes: Math.max(0, playerCount - playing) }
 }
 
 export interface ScheduleQuality {
@@ -522,10 +558,10 @@ export function describeSchedule(t: Pick<Tournament, 'players' | 'arenas' | 'rou
  * ⌈P/k⌉ rounds, with `G` arenas in use per round. Null when no group can be
  * formed. Still a lower bound — see suggestRounds for the verified number.
  */
-export function minRoundsForFullCoverage(playerCount: number, arenaCount: number, groupSize: number): number | null {
-  const { groups } = roundShape(playerCount, arenaCount, groupSize)
+export function minRoundsForFullCoverage(playerCount: number, arenaCount: number, groupSize: number, allowUneven = true): number | null {
+  const { groups, playing } = roundShape(playerCount, arenaCount, groupSize, allowUneven)
   if (groups < 1 || arenaCount < 1) return null
-  const byPlays = Math.ceil((arenaCount * playerCount) / (groups * groupSize))
+  const byPlays = Math.ceil((arenaCount * playerCount) / playing)
   const byArenaVisits = Math.ceil((arenaCount * Math.ceil(playerCount / groupSize)) / groups)
   return Math.max(byPlays, byArenaVisits)
 }
@@ -542,13 +578,17 @@ export interface RoundSuggestion {
  * The lower bound, checked against the real scheduler; steps up a few rounds if
  * the bound turns out not to be achievable for these numbers.
  */
-export function suggestRounds(playerIds: Id[], arenaIds: Id[], groupSize: number, seed = 1, maxExtra = 3): RoundSuggestion | null {
-  const min = minRoundsForFullCoverage(playerIds.length, arenaIds.length, groupSize)
+export function suggestRounds(playerIds: Id[], arenaIds: Id[], groupSize: number, allowUneven = true, seed = 1, maxExtra = 3): RoundSuggestion | null {
+  const min = minRoundsForFullCoverage(playerIds.length, arenaIds.length, groupSize, allowUneven)
   if (min === null) return null
   const players = playerIds.map((id) => ({ id, name: id, active: true }))
   const arenas = arenaIds.map((id) => ({ id, name: id, active: true }))
   for (let rounds = min; rounds <= min + maxExtra; rounds++) {
-    const q = describeSchedule({ players, arenas, rounds: generateRounds({ playerIds, arenaIds, groupSize, roundsToGenerate: rounds, history: [], seed }) })
+    const q = describeSchedule({
+      players,
+      arenas,
+      rounds: generateRounds({ playerIds, arenaIds, groupSize, roundsToGenerate: rounds, history: [], allowUneven, seed }),
+    })
     if (q.everyoneAllArenas) return { rounds, verified: true, exact: q.everyoneAllArenasOnce }
   }
   return { rounds: min, verified: false, exact: false }

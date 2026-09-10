@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { describeSchedule, minRoundsForFullCoverage, roundShape, suggestRounds } from '../../lib/scheduler'
-import { pointsForBye, pointsForPlacement } from '../../lib/scoring'
+import { formatPoints, pointsForBye, pointsForPlacement } from '../../lib/scoring'
 import { ordinal } from '../../lib/label'
 import { activeArenas, activePlayers, finalShape, validateSetup } from '../../state/reducer'
 import type { FinalStage } from '../../types'
@@ -20,22 +20,27 @@ export function SetupScreen() {
 
   const players = activePlayers(t)
   const arenas = activeArenas(t)
-  const { groupSize, roundCount, byePoints, finalStage } = t.settings
+  const { groupSize, roundCount, byePoints, finalStage, unevenGroups } = t.settings
   const fin = finalShape(t)
-  const shape = roundShape(players.length, arenas.length, groupSize)
+  const shape = roundShape(players.length, arenas.length, groupSize, unevenGroups)
   const problems = validateSetup(t)
   const hasSchedule = t.rounds.length > 0
   const quality = hasSchedule ? describeSchedule(t) : null
 
   const pointsPreview = Array.from({ length: groupSize }, (_, i) => `${ordinal(i + 1)} ${pointsForPlacement(i + 1, groupSize)}`).join(' · ')
 
-  const minRounds = minRoundsForFullCoverage(players.length, arenas.length, groupSize)
+  const minRounds = minRoundsForFullCoverage(players.length, arenas.length, groupSize, unevenGroups)
   const hints: string[] = []
   if (players.length >= 2 && arenas.length >= 1 && groupSize >= 2 && shape.groups > 0) {
+    const sizesText = shape.sizes.every((n) => n === groupSize) ? `${shape.groups} ${shape.groups === 1 ? 'group' : 'groups'} of ${groupSize}` : `${shape.groups} groups (${shape.sizes.join(' + ')})`
     hints.push(
-      `${players.length} players ÷ ${groupSize} = ${shape.groups} ${shape.groups === 1 ? 'group' : 'groups'} per round on ${shape.groups} of ${arenas.length} ${label(arenas.length).toLowerCase()}` +
-        (shape.byes ? `; ${shape.byes} ${shape.byes === 1 ? 'player sits' : 'players sit'} out each round.` : '.'),
+      `${players.length} players → ${sizesText} per round on ${shape.groups} of ${arenas.length} ${label(arenas.length).toLowerCase()}` +
+        (shape.byes ? `; ${shape.byes} ${shape.byes === 1 ? 'player sits' : 'players sit'} out each round.` : '; nobody sits out.'),
     )
+    if (shape.sizes.some((n) => n < groupSize)) {
+      const small = Math.min(...shape.sizes)
+      hints.push(`A group of ${small} scores ${Array.from({ length: small }, (_, i) => formatPoints(pointsForPlacement(i + 1, small, groupSize))).join(' · ')} — same top, bottom and average as a group of ${groupSize}.`)
+    }
     if (minRounds !== null) {
       if (roundCount < minRounds) hints.push(`Everyone needs at least ${minRounds} rounds to play every ${label(1).toLowerCase()}; with ${roundCount} some ${label(2).toLowerCase()} are missed.`)
       else if (roundCount === minRounds) hints.push(`${roundCount} rounds is the minimum for everyone to play every ${label(1).toLowerCase()}${shape.byes === 0 ? ' — exactly once' : ''}.`)
@@ -51,6 +56,7 @@ export function SetupScreen() {
         players.map((p) => p.id),
         arenas.map((a) => a.id),
         groupSize,
+        unevenGroups,
       )
       setSuggestion(result)
       if (result) dispatch({ type: 'UPDATE_SETTINGS', settings: { roundCount: result.rounds } })
@@ -120,6 +126,14 @@ export function SetupScreen() {
           max={Math.max(2, players.length || 8)}
           onChange={(n) => dispatch({ type: 'UPDATE_SETTINGS', settings: { groupSize: n } })}
         />
+        {groupSize >= 3 && (
+          <label className="stepper">
+            <span className="stepper-label">
+              Uneven groups <span className="muted small">one player fewer in some groups instead of sitting out</span>
+            </span>
+            <input type="checkbox" className="switch" checked={unevenGroups} onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', settings: { unevenGroups: e.target.checked } })} />
+          </label>
+        )}
         <Stepper label="Rounds" value={roundCount} min={1} max={30} onChange={(n) => dispatch({ type: 'UPDATE_SETTINGS', settings: { roundCount: n } })} />
         {minRounds !== null && (
           <div className="row">

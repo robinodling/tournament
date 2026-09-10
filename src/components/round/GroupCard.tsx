@@ -15,7 +15,7 @@ interface Props {
 
 export function GroupCard({ group, onClick, compact, seeded, highlight }: Props) {
   const { player, arena } = useNames()
-  const { readOnly } = useTournament()
+  const { t, readOnly } = useTournament()
   const done = group.result !== undefined
   const order = group.result ?? group.playerIds
   const k = group.playerIds.length
@@ -54,7 +54,7 @@ export function GroupCard({ group, onClick, compact, seeded, highlight }: Props)
               </span>
             )}
             <span className="grow">{player(pid)}</span>
-            {done && !seeded && <span className="pts">{pts(pointsForPlacement(i + 1, k))}</span>}
+            {done && !seeded && <span className="pts">{pts(pointsForPlacement(i + 1, k, t.settings.groupSize))}</span>}
           </div>
         ))}
       </div>

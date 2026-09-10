@@ -13,7 +13,7 @@ function tournament(): Tournament {
       { id: 'a1', name: 'A1', active: true },
       { id: 'a2', name: 'A2', active: true },
     ],
-    settings: { groupSize: 4, roundCount: 2, byePoints: 'average', arenaLabel: 'Arena', finalStage: 'none', bracketSize: 0, seed: 1 },
+    settings: { groupSize: 4, roundCount: 2, byePoints: 'average', arenaLabel: 'Arena', finalStage: 'none', bracketSize: 0, unevenGroups: true, seed: 1 },
     rounds: [
       { groups: [{ id: 'g1', arenaId: 'a1', playerIds: ['p0', 'p1', 'p2', 'p3'], result: ['p0', 'p1', 'p2', 'p3'] }], byePlayerIds: ['p4'] },
       { groups: [{ id: 'g2', arenaId: 'a2', playerIds: ['p4', 'p1', 'p2', 'p3'], result: ['p1', 'p4', 'p3', 'p2'] }], byePlayerIds: ['p0'] },
@@ -30,6 +30,12 @@ describe('scoring', () => {
     expect(pointsForPlacement(1, 4)).toBe(4)
     expect(pointsForPlacement(4, 4)).toBe(1)
     expect(pointsForPlacement(1, 2)).toBe(2)
+  })
+
+  it('stretches a smaller group over the same range as a full one', () => {
+    expect([1, 2, 3].map((r) => pointsForPlacement(r, 3, 4))).toEqual([4, 2.5, 1])
+    expect([1, 2].map((r) => pointsForPlacement(r, 2, 3))).toEqual([3, 1])
+    expect([1, 2, 3, 4].map((r) => pointsForPlacement(r, 4, 4))).toEqual([4, 3, 2, 1])
   })
 
   it('bye points', () => {

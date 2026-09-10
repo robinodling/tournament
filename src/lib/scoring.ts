@@ -1,8 +1,13 @@
 import type { Bracket, ByePoints, Id, Tournament } from '../types'
 
-/** 1st place in a group of k earns k points, last place earns 1. */
-export function pointsForPlacement(rank: number, groupSize: number): number {
-  return groupSize - rank + 1
+/**
+ * 1st place in a full group of `scale` players earns `scale` points, last earns 1.
+ * A smaller group is stretched over the same range so its top, bottom and
+ * average match a full group's (groups of 4 → 4/3/2/1; a group of 3 → 4/2.5/1).
+ */
+export function pointsForPlacement(rank: number, groupSize: number, scale: number = groupSize): number {
+  if (groupSize <= 1) return scale
+  return 1 + ((scale - 1) * (groupSize - rank)) / (groupSize - 1)
 }
 
 export function pointsForBye(groupSize: number, mode: ByePoints): number {
@@ -74,7 +79,7 @@ export function computeStandings(t: Tournament): StandingRow[] {
         const row = rows.get(pid)
         if (!row) return
         const rank = i + 1
-        row.points += pointsForPlacement(rank, g.result!.length)
+        row.points += pointsForPlacement(rank, g.result!.length, k)
         row.played++
         if (row.placements.length < rank) row.placements.length = rank
         row.placements[rank - 1] = (row.placements[rank - 1] ?? 0) + 1
