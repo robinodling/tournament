@@ -19,7 +19,23 @@ createRoot(document.getElementById('root')!).render(
 
 // Offline shell + installability. Installed web apps also get far more durable storage.
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  // A new deploy takes over automatically (the worker is network-first and calls
+  // skipWaiting); when that happens while the app is open we offer a reload.
+  let hadController = !!navigator.serviceWorker.controller
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hadController) window.dispatchEvent(new Event('appupdated'))
+    hadController = true
+  })
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {})
+    navigator.serviceWorker
+      .register(`${import.meta.env.BASE_URL}sw.js`)
+      .then((reg) => {
+        const check = () => reg.update().catch(() => {})
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible') check()
+        })
+        setInterval(check, 60 * 60 * 1000)
+      })
+      .catch(() => {})
   })
 }

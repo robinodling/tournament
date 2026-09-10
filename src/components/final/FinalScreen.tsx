@@ -5,6 +5,7 @@ import { useNames, useTournament } from '../../state/TournamentContext'
 import type { Group } from '../../types'
 import { GroupCard } from '../round/GroupCard'
 import { RankingSheet } from '../round/RankingSheet'
+import { BracketScreen } from './BracketScreen'
 
 export function FinalScreen() {
   const { t, dispatch } = useTournament()
@@ -12,6 +13,7 @@ export function FinalScreen() {
   const [editing, setEditing] = useState<{ group: Group; context: string } | null>(null)
   const final = t.final
   if (!final) return null
+  if (final.kind === 'bracket') return <BracketScreen />
 
   const total = final.groups.length
   const k = t.settings.groupSize

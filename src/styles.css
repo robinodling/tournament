@@ -731,3 +731,33 @@ kbd {
   border-radius: 6px;
   padding: 1px 6px;
 }
+
+/* ---------- knockout ---------- */
+.tbd {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.player-line.winner {
+  font-weight: 700;
+}
+
+.player-line.loser {
+  color: var(--muted);
+}
+
+.update-banner {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 10px);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}

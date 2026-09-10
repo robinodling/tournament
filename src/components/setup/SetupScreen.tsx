@@ -118,8 +118,20 @@ export function SetupScreen() {
             <option value="none">None</option>
             <option value="top">Top {groupSize} final</option>
             <option value="tiers">Finals for everyone</option>
+            <option value="bracket">Knockout bracket</option>
           </select>
         </label>
+        {finalStage === 'bracket' && (
+          <label className="stepper">
+            <span className="stepper-label">Bracket</span>
+            <select className="input" style={{ width: 'auto' }} value={t.settings.bracketSize} onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', settings: { bracketSize: Number(e.target.value) } })}>
+              <option value={0}>Everyone</option>
+              <option value={4}>Top 4</option>
+              <option value={8}>Top 8</option>
+              <option value={16}>Top 16</option>
+            </select>
+          </label>
+        )}
         <p className="hint">
           Points per round: <strong>{pointsPreview}</strong>
         </p>
@@ -132,6 +144,14 @@ export function SetupScreen() {
           <p className="hint">
             After the rounds, standings 1–{groupSize} play the A-final{fin.groups > 1 ? `, ${groupSize + 1}–${2 * groupSize} the B-final` : ''}
             {fin.groups > 2 ? ', and so on' : ''} — {fin.groups} {fin.groups === 1 ? 'final' : 'finals'} on {fin.groups} {label(fin.groups).toLowerCase()}. Final placements decide the overall order
+            {fin.finalists < players.length ? `; players below ${fin.finalists} keep their standings position` : ''}.
+          </p>
+        )}
+        {finalStage === 'bracket' && fin.groups > 0 && (
+          <p className="hint">
+            After the rounds, the top {fin.finalists} by standings enter a {fin.size}-player knockout: 1st plays {fin.size}th, 2nd plays {fin.size - 1}th, and so on
+            {fin.size > fin.finalists ? `; the top ${fin.size - fin.finalists} ${fin.size - fin.finalists === 1 ? 'seed skips' : 'seeds skip'} the first round` : ''}. Winners
+            advance head-to-head to a single final{fin.size >= 4 ? ', semifinal losers play for bronze' : ''}
             {fin.finalists < players.length ? `; players below ${fin.finalists} keep their standings position` : ''}.
           </p>
         )}

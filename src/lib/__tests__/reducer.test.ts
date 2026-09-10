@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { initialTournament, isFinalComplete, isLocked, pickRandomArena, reducer, validateSetup, type Action } from '../../state/reducer'
+import { bracketOrder, initialTournament, isFinalComplete, isLocked, matchSlots, pickRandomArena, reducer, validateSetup, type Action } from '../../state/reducer'
 import { computeFinalRanking, computeStandings } from '../scoring'
 import { describeSchedule } from '../scheduler'
 import type { Tournament } from '../../types'
@@ -227,5 +227,120 @@ describe('reducer', () => {
     const after = reducer(t, { type: 'RANDOMIZE_FINAL_ARENAS', seed: 9 })!
     expect(after.final!.groups[0].arenaId).toBe(a.arenaId)
     expect(after.final!.groups[1].arenaId).not.toBe(a.arenaId)
+  })
+
+  describe('knockout bracket', () => {
+    const win = (t: Tournament, groupId: string, winner: string) => {
+      const g = [...t.final!.bracket!.rounds.flat(), t.final!.bracket!.bronze!].find((m) => m.id === groupId)!
+      return reducer(t, { type: 'SET_RESULT', groupId, order: [winner, ...g.playerIds.filter((p) => p !== winner)] })!
+    }
+
+    it('seed order pairs 1 vs last and keeps the top two apart until the final', () => {
+      expect(bracketOrder(4)).toEqual([1, 4, 2, 3])
+      expect(bracketOrder(8)).toEqual([1, 8, 4, 5, 2, 7, 3, 6])
+    })
+
+    it('8 players: quarterfinals seeded from standings, winners flow to semis, final and bronze', () => {
+      let t = run([{ type: 'UPDATE_SETTINGS', settings: { finalStage: 'bracket' } }, { type: 'START' }], setupEight())
+      t = playAllRounds(t)
+      expect(t.phase).toBe('final')
+      expect(t.final!.kind).toBe('bracket')
+      const b = t.final!.bracket!
+      const s = computeStandings(t).map((r) => r.playerId) // s[0] = seed 1
+      expect(b.size).toBe(8)
+      expect(b.seeds).toEqual(s)
+      expect(b.rounds.map((r) => r.length)).toEqual([4, 2, 1])
+      expect(b.rounds[0].map((m) => m.playerIds)).toEqual([[s[0], s[7]], [s[3], s[4]], [s[1], s[6]], [s[2], s[5]]])
+      expect(new Set(b.rounds[0].map((m) => m.arenaId)).size).toBe(4)
+      expect(b.bronze).toBeDefined()
+      expect(computeFinalRanking(t).decidedByFinal).toBe(false)
+
+      // higher seed wins every quarterfinal
+      for (const m of b.rounds[0]) t = win(t, m.id, m.playerIds[0])
+      let semis = t.final!.bracket!.rounds[1]
+      expect(semis[0].playerIds).toEqual([s[0], s[3]])
+      expect(semis[1].playerIds).toEqual([s[1], s[2]])
+      expect(semis[0].arenaId).not.toBe(semis[1].arenaId)
+      t = win(t, semis[0].id, s[0])
+      t = win(t, semis[1].id, s[1])
+      const fin = t.final!.bracket!.rounds[2][0]
+      const bronze = t.final!.bracket!.bronze!
+      expect(fin.playerIds).toEqual([s[0], s[1]])
+      expect(bronze.playerIds).toEqual([s[3], s[2]])
+      expect(fin.arenaId).not.toBe(bronze.arenaId)
+      expect(isFinalComplete(t)).toBe(false)
+      t = win(t, bronze.id, s[2])
+      t = win(t, fin.id, s[1]) // upset in the final
+      expect(isFinalComplete(t)).toBe(true)
+      const ranking = computeFinalRanking(t)
+      expect(ranking.decidedByFinal).toBe(true)
+      expect(ranking.rows.slice(0, 4).map((r) => r.playerId)).toEqual([s[1], s[0], s[2], s[3]])
+      // quarterfinal losers 5–8 in standings order
+      expect(ranking.rows.slice(4).map((r) => r.playerId)).toEqual([s[4], s[5], s[6], s[7]])
+      expect(ranking.rows.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    })
+
+    it('editing an earlier match clears everything that depended on it', () => {
+      let t = run([{ type: 'UPDATE_SETTINGS', settings: { finalStage: 'bracket' } }, { type: 'START' }], setupEight())
+      t = playAllRounds(t)
+      const s = computeStandings(t).map((r) => r.playerId)
+      for (const m of t.final!.bracket!.rounds[0]) t = win(t, m.id, m.playerIds[0])
+      const semi0 = t.final!.bracket!.rounds[1][0]
+      t = win(t, semi0.id, s[0])
+      expect(t.final!.bracket!.rounds[2][0].playerIds).toEqual([s[0]])
+      // flip quarterfinal 2: seed 5 beats seed 4 → semi 1 changes and loses its result, final loses its participant
+      const qf2 = t.final!.bracket!.rounds[0][1]
+      t = win(t, qf2.id, s[4])
+      expect(t.final!.bracket!.rounds[1][0].playerIds).toEqual([s[0], s[4]])
+      expect(t.final!.bracket!.rounds[1][0].result).toBeUndefined()
+      expect(t.final!.bracket!.rounds[2][0].playerIds).toEqual([])
+    })
+
+    it('7 players: the top seed gets a bye and advances automatically', () => {
+      let t = run([
+        { type: 'UPDATE_SETTINGS', settings: { finalStage: 'bracket' } },
+        { type: 'SET_PLAYER_COUNT', count: 7 },
+        { type: 'SET_ARENA_COUNT', count: 4 },
+        { type: 'START' },
+      ])
+      t = playAllRounds(t)
+      const b = t.final!.bracket!
+      const s = computeStandings(t).map((r) => r.playerId)
+      expect(b.size).toBe(8)
+      expect(b.seeds).toHaveLength(7)
+      expect(b.rounds[0][0].playerIds).toEqual([s[0]])
+      expect(b.rounds[0][0].result).toEqual([s[0]])
+      expect(matchSlots(b, 1, 0)).toEqual([s[0], undefined])
+      expect(b.rounds[1][0].playerIds).toEqual([s[0]])
+      t = win(t, b.rounds[0][1].id, s[3])
+      expect(t.final!.bracket!.rounds[1][0].playerIds).toEqual([s[0], s[3]])
+    })
+
+    it('top-4 bracket: non-entrants keep their standings positions below the bracket', () => {
+      let t = run([{ type: 'UPDATE_SETTINGS', settings: { finalStage: 'bracket', bracketSize: 4 } }, { type: 'START' }], setupEight())
+      t = playAllRounds(t)
+      const b = t.final!.bracket!
+      const s = computeStandings(t).map((r) => r.playerId)
+      expect(b.size).toBe(4)
+      expect(b.rounds.map((r) => r.length)).toEqual([2, 1])
+      expect(b.rounds[0].map((m) => m.playerIds)).toEqual([[s[0], s[3]], [s[1], s[2]]])
+      const rows = computeFinalRanking(t).rows
+      expect(rows.slice(4).map((r) => r.playerId)).toEqual(s.slice(4))
+    })
+
+    it('random arena for a match avoids the other playable matches of the same round', () => {
+      let t = run([{ type: 'UPDATE_SETTINGS', settings: { finalStage: 'bracket' } }, { type: 'START' }], setupEight())
+      t = playAllRounds(t)
+      const [m0, ...others] = t.final!.bracket!.rounds[0]
+      for (const r of [0, 0.5, 0.99]) {
+        const pick = pickRandomArena(t, m0.id, () => r)
+        // four matches, four arenas → the only arena not used by the other three is m0's own
+        expect(pick).toBe(m0.arenaId)
+        expect(others.map((m) => m.arenaId)).not.toContain(pick)
+      }
+      const next = reducer(t, { type: 'RANDOMIZE_FINAL_ARENAS', seed: 3 })!
+      const arenas = next.final!.bracket!.rounds[0].map((m) => m.arenaId)
+      expect(new Set(arenas).size).toBe(4)
+    })
   })
 })

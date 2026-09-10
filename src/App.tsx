@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { UpdateBanner } from './components/common/UpdateBanner'
 import { FinalScreen } from './components/final/FinalScreen'
 import { FinishedScreen } from './components/finished/FinishedScreen'
 import { ManageScreen } from './components/manage/ManageScreen'
@@ -61,6 +62,7 @@ function Shell() {
         {active === 'schedule' && <ScheduleScreen />}
         {active === 'manage' && <ManageScreen />}
       </main>
+      <UpdateBanner />
       <nav className="tabbar" aria-label="Sections">
         {tabs.map((x) => (
           <button

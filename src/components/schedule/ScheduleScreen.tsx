@@ -5,6 +5,7 @@ import { useNames, useTournament } from '../../state/TournamentContext'
 import type { Group } from '../../types'
 import { GroupCard } from '../round/GroupCard'
 import { RankingSheet } from '../round/RankingSheet'
+import { BracketRounds } from '../final/BracketRounds'
 
 export function ScheduleScreen() {
   const { t, dispatch } = useTournament()
@@ -38,7 +39,15 @@ export function ScheduleScreen() {
           </section>
         )
       })}
-      {t.final && (
+      {t.final?.kind === 'bracket' && t.final.bracket && (
+        <section className="schedule-round">
+          <div className="status-line">
+            <strong>Knockout</strong>
+          </div>
+          <BracketRounds bracket={t.final.bracket} compact onEdit={(group, context) => setEditing({ group, context, final: true })} />
+        </section>
+      )}
+      {t.final && t.final.kind !== 'bracket' && (
         <section className="schedule-round">
           <div className="status-line">
             <strong>{t.final.groups.length > 1 ? 'Finals' : 'Final'}</strong>

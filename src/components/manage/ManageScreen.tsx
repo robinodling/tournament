@@ -82,8 +82,26 @@ export function ManageScreen() {
             <option value="none">None</option>
             <option value="top">Top {t.settings.groupSize} final</option>
             <option value="tiers">Finals for everyone</option>
+            <option value="bracket">Knockout bracket</option>
           </select>
         </label>
+        {t.settings.finalStage === 'bracket' && (
+          <label className="stepper">
+            <span className="stepper-label">Bracket</span>
+            <select
+              className="input"
+              style={{ width: 'auto' }}
+              value={t.settings.bracketSize}
+              disabled={t.phase !== 'running'}
+              onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', settings: { bracketSize: Number(e.target.value) } })}
+            >
+              <option value={0}>Everyone</option>
+              <option value={4}>Top 4</option>
+              <option value={8}>Top 8</option>
+              <option value={16}>Top 16</option>
+            </select>
+          </label>
+        )}
         <label className="stepper">
           <span className="stepper-label">Points for sitting out</span>
           <select className="input" style={{ width: 'auto' }} value={t.settings.byePoints} onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', settings: { byePoints: e.target.value as 'average' | 'zero' } })}>
@@ -117,10 +135,10 @@ export function ManageScreen() {
               disabled={finalHasResults(t)}
               onClick={() => window.confirm('Re-seed the final from the current standings?') && dispatch({ type: 'RESEED_FINAL' })}
             >
-              Re-seed final from standings
+              Re-seed from standings
             </button>
-            <button type="button" className="btn btn-danger" onClick={() => window.confirm('Skip the final? The standings decide the final order.') && dispatch({ type: 'SKIP_FINAL' })}>
-              Skip the final
+            <button type="button" className="btn btn-danger" onClick={() => window.confirm('Skip the final stage? The standings decide the final order.') && dispatch({ type: 'SKIP_FINAL' })}>
+              Skip the final stage
             </button>
             <button
               type="button"

@@ -1,4 +1,4 @@
-import type { ByePoints, Id, Tournament } from '../types'
+import type { Bracket, ByePoints, Id, Tournament } from '../types'
 
 /** 1st place in a group of k earns k points, last place earns 1. */
 export function pointsForPlacement(rank: number, groupSize: number): number {
@@ -119,6 +119,7 @@ export interface FinalRanking {
  */
 export function computeFinalRanking(t: Tournament): FinalRanking {
   const standings = computeStandings(t)
+  if (t.final?.kind === 'bracket' && t.final.bracket) return bracketRanking(standings, t.final.bracket)
   const groups = t.final?.groups ?? []
   if (groups.length === 0) return { rows: standings, decidedByFinal: false, finalists: 0 }
 
@@ -135,6 +136,53 @@ export function computeFinalRanking(t: Tournament): FinalRanking {
   }
   const finalists = ordered.length
   const rest = standings.filter((r) => !ordered.some((o) => o.playerId === r.playerId))
+  rest.forEach((r, i) => {
+    const prev = i > 0 ? rest[i - 1] : null
+    const rank = prev && tied(r, prev) ? ordered[ordered.length - 1].rank : finalists + i + 1
+    ordered.push({ ...r, rank })
+  })
+  return { rows: ordered, decidedByFinal: decided, finalists }
+}
+
+const ALIVE = 2000
+
+/**
+ * Knockout order: final winner, final loser, bronze winner, bronze loser, then
+ * players eliminated in later rounds before earlier ones (ties by standings).
+ * Players still in the bracket sit above everyone eliminated so far.
+ */
+function bracketRanking(standings: StandingRow[], bracket: Bracket): FinalRanking {
+  const { rounds, bronze, seeds } = bracket
+  const byId = new Map(standings.map((r) => [r.playerId, r]))
+  const order = new Map(standings.map((r, i) => [r.playerId, i]))
+  const score = new Map<Id, number>()
+  let decided = false
+  for (const id of seeds) score.set(id, ALIVE)
+  rounds.forEach((matches, r) => {
+    for (const m of matches) {
+      if (m.result && m.playerIds.length === 2) {
+        decided = true
+        score.set(m.result[1], r * 10)
+      }
+    }
+  })
+  const finalMatch = rounds[rounds.length - 1]?.[0]
+  if (finalMatch?.result && finalMatch.playerIds.length === 2) {
+    score.set(finalMatch.result[0], 1000)
+    score.set(finalMatch.result[1], 999)
+  }
+  if (bronze?.result && bronze.playerIds.length === 2) {
+    score.set(bronze.result[0], 998)
+    score.set(bronze.result[1], 997)
+  }
+  const entrants = [...seeds].sort((a, b) => (score.get(b) ?? 0) - (score.get(a) ?? 0) || (order.get(a) ?? 0) - (order.get(b) ?? 0))
+  const ordered: StandingRow[] = []
+  for (const id of entrants) {
+    const row = byId.get(id)
+    if (row) ordered.push({ ...row, rank: ordered.length + 1 })
+  }
+  const finalists = ordered.length
+  const rest = standings.filter((r) => !seeds.includes(r.playerId))
   rest.forEach((r, i) => {
     const prev = i > 0 ? rest[i - 1] : null
     const rank = prev && tied(r, prev) ? ordered[ordered.length - 1].rank : finalists + i + 1

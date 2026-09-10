@@ -16,3 +16,17 @@ export function ordinal(n: number): string {
 export function tierName(index: number, total: number): string {
   return total <= 1 ? 'Final' : `${String.fromCharCode(65 + index)}-final`
 }
+
+/** Name of a knockout round by its number of matches. */
+export function roundName(matches: number): string {
+  if (matches === 1) return 'Final'
+  if (matches === 2) return 'Semifinal'
+  if (matches === 4) return 'Quarterfinal'
+  return `Round of ${matches * 2}`
+}
+
+/** "Quarterfinal 2", or just "Final" for the last round. */
+export function matchLabel(matchesInRound: number, index: number): string {
+  const name = roundName(matchesInRound)
+  return matchesInRound === 1 ? name : `${name} ${index + 1}`
+}

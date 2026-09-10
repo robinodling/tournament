@@ -17,11 +17,18 @@ and opponents as possible.
 - **Standings**: total points, ties broken by count-back (most 1sts, then 2nds, …).
 - **Schedule** is optimised for, in priority order: every player plays every arena (as evenly as
   possible), byes spread evenly, group-mates vary, arenas used evenly.
-- **Final stage** (optional): after the rounds, either the top `k` in the standings play one
-  final whose placements decide positions 1–`k`, or everyone plays *tiered* finals (standings
-  1–`k` in the A-final, `k+1`–`2k` in the B-final, … one per arena) whose placements decide the
-  overall order. Group-stage points remain the qualification table; finals decide positions,
-  they do not add points. The admin can pick the arena for each final, re-seed it, or skip it.
+- **Final stage** (optional), seeded from the standings after the rounds:
+  - *Top-k final* — the best `k` play one final whose placements decide positions 1–`k`.
+  - *Finals for everyone* — tiered finals (standings 1–`k` in the A-final, `k+1`–`2k` in the
+    B-final, … one per arena) whose placements decide the overall order.
+  - *Knockout bracket* — everyone (or the top 4/8/16) enters a single-elimination tree seeded
+    1st vs last, 2nd vs second-last, … so the top two can only meet in the final. Head-to-head
+    matches, winner advances; if the count isn't a power of two the top seeds get first-round
+    byes; semifinal losers play a bronze match. Editing an earlier match cascades downstream.
+
+  Group-stage points remain the qualification table; the final stage decides positions, it
+  does not add points. The admin can pick (or randomise) the arena for each final/match,
+  re-seed, or skip the stage.
 
 ### 8 players, 4 arenas, groups of 4, 4 rounds
 
@@ -58,6 +65,10 @@ states kept as backups. The app asks the browser for persistent storage and is i
 **Install app**; an Install button appears in the app when the browser allows a prompt). On
 iOS, **Add to Home Screen** is what exempts it from Safari's storage clean-up. Export a JSON
 copy if you want a belt-and-braces backup.
+
+Installed apps update themselves: the worker is network-first, so a new release is used the
+next time the app is opened online; if a release lands while the app is open, a "new version
+is ready — Reload" banner appears. No reinstall needed.
 
 ## Development
 

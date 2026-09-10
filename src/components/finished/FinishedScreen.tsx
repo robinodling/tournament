@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { tierName } from '../../lib/label'
 import { computeFinalRanking, formatPoints, standingsAsText } from '../../lib/scoring'
+import { BracketRounds } from '../final/BracketRounds'
 import { GroupCard } from '../round/GroupCard'
 import { useTournament } from '../../state/TournamentContext'
 import { StandingsTable } from '../standings/StandingsTable'
@@ -40,7 +41,13 @@ export function FinishedScreen() {
           )}
         </div>
       )}
-      {finals.length > 0 && (
+      {t.final?.kind === 'bracket' && t.final.bracket && (
+        <section className="section">
+          <h3 className="section-title">Knockout</h3>
+          <BracketRounds bracket={t.final.bracket} compact />
+        </section>
+      )}
+      {t.final?.kind !== 'bracket' && finals.length > 0 && (
         <section className="section">
           <h3 className="section-title">{finals.length > 1 ? 'Finals' : 'Final'}</h3>
           <div className="schedule-groups">
@@ -56,7 +63,7 @@ export function FinishedScreen() {
       <StandingsTable rows={rows} />
       <p className="hint">
         {decidedByFinal
-          ? `Positions 1–${finalists} were decided by the final${finals.length > 1 ? 's' : ''}; points shown are from the group stage.`
+          ? `Positions 1–${finalists} were decided by the ${t.final?.kind === 'bracket' ? 'knockout bracket' : `final${finals.length > 1 ? 's' : ''}`}; points shown are from the group stage.`
           : 'Ties are broken by most 1st places, then 2nd places, and so on.'}
       </p>
       <div className="row">

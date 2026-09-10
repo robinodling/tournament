@@ -34,9 +34,10 @@ function enterResultsForCurrentRound() {
   for (let i = 0; i < cards.length; i++) {
     fireEvent.click(screen.getAllByText('Tap to enter result')[0])
     const dialog = screen.getByRole('dialog')
-    // tap the four rank buttons in order
-    for (let k = 0; k < 4; k++) {
-      const buttons = within(dialog).getAllByRole('button').filter((b) => b.className.includes('rank-btn'))
+    // tap rank buttons in order until none are left (the last player is filled in automatically)
+    for (;;) {
+      const buttons = within(dialog).queryAllByRole('button').filter((b) => b.className.includes('rank-btn'))
+      if (buttons.length === 0) break
       fireEvent.click(buttons[0])
     }
     fireEvent.click(within(dialog).getByText('Save result'))

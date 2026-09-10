@@ -64,7 +64,17 @@ export function RankingSheet({ context, group, showPoints = true, onClose }: Pro
             Who finished <strong>{ordinal(order.length + 1)}</strong>?
           </p>
           {remaining.map((id) => (
-            <button key={id} type="button" className="btn rank-btn" onClick={() => setOrder([...order, id])}>
+            <button
+              key={id}
+              type="button"
+              className="btn rank-btn"
+              onClick={() => {
+                const next = [...order, id]
+                const rest = group.playerIds.filter((p) => !next.includes(p))
+                // The last player left is implied — fill them in.
+                setOrder(rest.length === 1 ? [...next, rest[0]] : next)
+              }}
+            >
               <span className="placement">{ordinal(order.length + 1)}</span>
               {player(id)}
             </button>

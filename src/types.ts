@@ -34,8 +34,10 @@ export type ByePoints = 'average' | 'zero'
  * Optional stage after the rounds. 'top': the best `groupSize` players play one
  * final that decides positions 1..k. 'tiers': everyone plays a final in tiers by
  * standing (A-final, B-final, …, one per arena); placements decide the order.
+ * 'bracket': seeded single-elimination tree (1st vs last, 2nd vs second-last, …)
+ * with head-to-head matches down to a single final plus a bronze match.
  */
-export type FinalStage = 'none' | 'top' | 'tiers'
+export type FinalStage = 'none' | 'top' | 'tiers' | 'bracket'
 
 export interface Settings {
   groupSize: number
@@ -44,12 +46,27 @@ export interface Settings {
   /** Display word for "the thing a group plays on": Arena, Machine, Table, Court… */
   arenaLabel: string
   finalStage: FinalStage
+  /** Bracket entrants cap: 0 = everyone, otherwise 4 / 8 / 16 top seeds. */
+  bracketSize: number
   seed: number
 }
 
+export interface Bracket {
+  /** Number of slots (power of two); slots beyond `seeds.length` are byes for the top seeds. */
+  size: number
+  /** Entrants in seeding (standings) order. */
+  seeds: Id[]
+  /** rounds[0] is the first round; the last round holds the single final. Matches are Groups of ≤ 2 players. */
+  rounds: Group[][]
+  /** Semifinal losers play for 3rd place (absent for a 2-player bracket). */
+  bronze?: Group
+}
+
 export interface Final {
-  /** Tier order: groups[0] is the A-final. playerIds are in seeding (standings) order. */
+  kind: 'groups' | 'bracket'
+  /** 'groups': tier order, groups[0] is the A-final; playerIds in seeding (standings) order. Empty for a bracket. */
   groups: Group[]
+  bracket?: Bracket
   seededAt: number
 }
 
