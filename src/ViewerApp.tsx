@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { JoinScreen } from './components/viewer/JoinScreen'
+import { isIosBrowser, loadNotifyPref, notificationSupport, requestNotificationPermission, saveNotifyPref, unlockAudio } from './lib/notify'
+import { useGameReadyNotifier } from './state/useGameReadyNotifier'
 import { FinalScreen } from './components/final/FinalScreen'
 import { FinishedScreen } from './components/finished/FinishedScreen'
 import { RoundScreen } from './components/round/RoundScreen'
@@ -25,9 +27,23 @@ export function ViewerApp({ code }: { code: string }) {
   const [tab, setTab] = useState<Tab>('round')
   const [identity, setIdentity] = useState<ViewerIdentity | undefined>(() => loadViewerIdentity(code))
   const [myUid, setMyUid] = useState<string | null>(null)
+  const [notify, setNotify] = useState(() => loadNotifyPref(code))
+  const [permission, setPermission] = useState(notificationSupport)
   const choose = (next: ViewerIdentity | undefined) => {
+    unlockAudio() // user gesture: lets the "game ready" beep play later
     saveViewerIdentity(code, next)
     setIdentity(next)
+  }
+  const toggleNotify = async () => {
+    unlockAudio()
+    const next = !notify
+    setNotify(next)
+    saveNotifyPref(code, next)
+    if (next && permission === 'default') setPermission(await requestNotificationPermission())
+  }
+  const allowNotifications = async () => {
+    unlockAudio()
+    setPermission(await requestNotificationPermission())
   }
 
   // Our anonymous identity — lets a phone that registered skip "Who are you?".
@@ -41,6 +57,7 @@ export function ViewerApp({ code }: { code: string }) {
   const registeredAs = state.status === 'live' && myUid ? state.t.players.find((p) => p.uid === myUid) : undefined
   // A phone that registered is recognised without asking; remember that choice like a manual one.
   const effectiveIdentity: ViewerIdentity | undefined = identity ?? (registeredAs ? { playerId: registeredAs.id } : undefined)
+  const [toast, dismissToast] = useGameReadyNotifier(state.status === 'live' ? state.t : null, effectiveIdentity?.playerId ?? null, notify)
   useEffect(() => {
     if (identity === undefined && registeredAs) saveViewerIdentity(code, { playerId: registeredAs.id })
   }, [identity, registeredAs, code])
@@ -141,8 +158,47 @@ export function ViewerApp({ code }: { code: string }) {
             <button type="button" className="link-btn" onClick={() => choose(undefined)}>
               change
             </button>
+            {claimed && (
+              <>
+                {' · '}
+                <button type="button" className="link-btn" onClick={() => void toggleNotify()} aria-pressed={notify} aria-label={notify ? 'Turn off game alerts' : 'Turn on game alerts'} title="Alert me when my game is ready">
+                  {notify ? '🔔 on' : '🔕 off'}
+                </button>
+              </>
+            )}
           </span>
         </header>
+        {toast && (
+          <div className="ready-toast" role="status">
+            <span className="grow">
+              <strong>🎯 Your game is ready — {toast.context}</strong>
+              <br />
+              <span className="small">
+                {toast.arena}
+                {toast.others.length ? ` with ${toast.others.join(', ')}` : ''}
+              </span>
+            </span>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={dismissToast} aria-label="Dismiss">
+              ✕
+            </button>
+          </div>
+        )}
+        {claimed && notify && permission !== 'granted' && (
+          <div className="notice">
+            {permission === 'default' ? (
+              <>
+                <span className="grow small">Get a notification when your game is ready.</span>
+                <button type="button" className="btn btn-sm" onClick={() => void allowNotifications()}>
+                  Allow
+                </button>
+              </>
+            ) : permission === 'unsupported' && isIosBrowser() ? (
+              <span className="grow small">On iPhone, add this page to your Home Screen to get notifications; in the browser you'll get a sound and a banner instead.</span>
+            ) : (
+              <span className="grow small">Notifications are blocked for this site; you'll still get a sound and a banner here.</span>
+            )}
+          </div>
+        )}
         <main className="content">
           {tab === 'round' && (t.phase === 'final' ? <FinalScreen /> : t.phase === 'finished' ? <FinishedScreen /> : <RoundScreen />)}
           {tab === 'standings' && <StandingsScreen />}

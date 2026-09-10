@@ -107,7 +107,14 @@ players open the shared link (`…/tournament/?room=CODE`). Before the start the
 roster** from their phone (the organiser's app adds them, linking to a pre-entered name if it
 matches); once the tournament runs, registered phones are recognised automatically and everyone
 else picks their name (or *Just watching*). Players can then send results only for the groups
-and matches they play in. That gate is client-side — the organiser's app
+and matches they play in.
+
+Games flow on their own: a group is playable once every player in it has finished their earlier
+rounds and its arena is free, and each player's phone shows their own next game (ready, or
+waiting for whom/what). When it becomes ready the phone alerts them — a system notification via
+the service worker where the browser allows it (Android; on iPhone only as a Home Screen app),
+plus a vibration, a short sound and an in-app banner. The bell in the room header turns this
+off per phone (default on). That gate is client-side — the organiser's app
 validates every incoming result and can overrule it — which is plenty for friends and keeps the
 database rules simple.
 
