@@ -33,7 +33,18 @@ jobs:
 
       - uses: actions/configure-pages@v5
         with:
-          enablement: true # create the Pages site (source: GitHub Actions) if it does not exist yet
+          enablement: true # create the Pages site if it does not exist yet
+
+      # A site created as "deploy from a branch" also runs GitHub's own Jekyll build of the
+      # repo root, which races this workflow and can publish the unbuilt source. Force the
+      # source to "GitHub Actions" so only this workflow's dist/ artifact is ever published.
+      - name: Ensure Pages deploys from this workflow only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow \
+            || echo "::warning::Could not switch the Pages source. Set Settings → Pages → Source to 'GitHub Actions' manually."
+          gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '"Pages source: " + .build_type' || true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
