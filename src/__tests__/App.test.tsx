@@ -15,6 +15,7 @@ afterEach(() => {
 
 async function setupEightPlayers() {
   render(<App />)
+  fireEvent.click(await screen.findByText('Create a tournament'))
   await screen.findByText('New tournament')
 
   fireEvent.change(screen.getByPlaceholderText('Arena'), { target: { value: 'Machine' } })

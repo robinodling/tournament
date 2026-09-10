@@ -12,7 +12,7 @@ import { GroupCard } from '../round/GroupCard'
 import { NamedList } from './NamedList'
 import { QualitySummary } from './QualitySummary'
 
-export function SetupScreen() {
+export function SetupScreen({ onBackToStart }: { onBackToStart?: () => void } = {}) {
   const { t, dispatch } = useTournament()
   const { label } = useNames()
   const [showPreview, setShowPreview] = useState(false)
@@ -74,6 +74,14 @@ export function SetupScreen() {
           {label(2).toLowerCase()} can also be adjusted mid-tournament.
         </p>
         <InstallCard compact />
+        {onBackToStart && (
+          <p className="hint" style={{ margin: 0 }}>
+            Just here to play?{' '}
+            <button type="button" className="link-btn" onClick={onBackToStart}>
+              Join a room instead
+            </button>
+          </p>
+        )}
       </header>
 
       <section className="section">

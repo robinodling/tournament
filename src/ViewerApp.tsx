@@ -8,7 +8,7 @@ import { RoundScreen } from './components/round/RoundScreen'
 import { ScheduleScreen } from './components/schedule/ScheduleScreen'
 import { StandingsScreen } from './components/standings/StandingsScreen'
 import { syncConfigured } from './lib/firebaseConfig'
-import { loadSync, loadViewerIdentity, saveViewerIdentity, type ViewerIdentity } from './lib/roomSync'
+import { loadSync, loadViewerIdentity, saveLastRoom, saveViewerIdentity, type ViewerIdentity } from './lib/roomSync'
 import { normalize } from './state/reducer'
 import { StaticTournamentProvider } from './state/TournamentContext'
 import type { Tournament } from './types'
@@ -45,6 +45,8 @@ export function ViewerApp({ code }: { code: string }) {
     unlockAudio()
     setPermission(await requestNotificationPermission())
   }
+
+  useEffect(() => saveLastRoom(code), [code])
 
   // Our anonymous identity — lets a phone that registered skip "Who are you?".
   useEffect(() => {
@@ -158,6 +160,10 @@ export function ViewerApp({ code }: { code: string }) {
             <button type="button" className="link-btn" onClick={() => choose(undefined)}>
               change
             </button>
+            {' · '}
+            <a className="link-btn" href={import.meta.env.BASE_URL}>
+              leave
+            </a>
             {claimed && (
               <>
                 {' · '}

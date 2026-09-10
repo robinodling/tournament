@@ -62,6 +62,11 @@ export function normalize(t: Tournament): Tournament {
   return final ? { ...base, final } : base
 }
 
+/** Nothing has been entered yet on this device (so the start page makes sense). */
+export function isFreshTournament(t: Tournament): boolean {
+  return t.phase === 'setup' && t.players.length === 0 && t.arenas.length === 0 && !t.room
+}
+
 /** A round is locked once any of its groups has a result; locked rounds are never re-drawn. */
 export function isLocked(round: Round): boolean {
   return round.groups.some((g) => g.result !== undefined)

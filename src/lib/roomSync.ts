@@ -92,3 +92,21 @@ export function saveViewerIdentity(code: string, identity: ViewerIdentity | unde
 export function canSubmitFor(viewerPlayerId: Id | null | undefined, group: Group): boolean {
   return typeof viewerPlayerId === 'string' && group.playerIds.includes(viewerPlayerId)
 }
+
+const LAST_ROOM_KEY = 'tournament:lastRoom'
+
+export function loadLastRoom(): string | null {
+  try {
+    return normalizeRoomCode(localStorage.getItem(LAST_ROOM_KEY))
+  } catch {
+    return null
+  }
+}
+
+export function saveLastRoom(code: string): void {
+  try {
+    localStorage.setItem(LAST_ROOM_KEY, code)
+  } catch {
+    /* ignore */
+  }
+}

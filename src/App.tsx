@@ -6,6 +6,8 @@ import { ManageScreen } from './components/manage/ManageScreen'
 import { RoundScreen } from './components/round/RoundScreen'
 import { ScheduleScreen } from './components/schedule/ScheduleScreen'
 import { SetupScreen } from './components/setup/SetupScreen'
+import { StartScreen } from './components/start/StartScreen'
+import { isFreshTournament } from './state/reducer'
 import { StandingsScreen } from './components/standings/StandingsScreen'
 import { activeRoundIndex, groupStageComplete } from './lib/flow'
 import { normalizeRoomCode } from './lib/roomSync'
@@ -39,6 +41,11 @@ function Shell() {
   const { t, dispatch } = useTournament()
   const [tab, setTab] = useState<Tab>(t.phase === 'setup' ? 'setup' : 'round')
   const sync = useRoomSync(t, dispatch)
+  const fresh = isFreshTournament(t)
+  const [mode, setMode] = useState<'start' | 'organise'>(fresh ? 'start' : 'organise')
+  useEffect(() => {
+    if (!fresh) setMode('organise')
+  }, [fresh])
 
   // Land on the right tab when the phase changes.
   useEffect(() => {
@@ -46,6 +53,8 @@ function Shell() {
     if (t.phase === 'running' || t.phase === 'final') setTab('round')
     if (t.phase === 'finished') setTab('standings')
   }, [t.phase])
+
+  if (mode === 'start' && fresh) return <StartScreen onOrganise={() => setMode('organise')} />
 
   const tabs = t.phase === 'setup' ? SETUP_TABS : t.phase === 'running' ? RUNNING_TABS : t.phase === 'final' ? FINAL_TABS : FINISHED_TABS
   const active = tabs.some((x) => x.id === tab) ? tab : tabs[0].id
@@ -68,7 +77,7 @@ function Shell() {
         </header>
       )}
       <main className="content">
-        {active === 'setup' && <SetupScreen />}
+        {active === 'setup' && <SetupScreen onBackToStart={fresh ? () => setMode('start') : undefined} />}
         {active === 'round' && (t.phase === 'final' ? <FinalScreen /> : <RoundScreen />)}
         {active === 'standings' && (t.phase === 'finished' ? <FinishedScreen /> : <StandingsScreen />)}
         {active === 'schedule' && <ScheduleScreen />}
