@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { describeSchedule, roundShape } from '../../lib/scheduler'
+import { describeSchedule, minRoundsForFullCoverage, roundShape, suggestRounds } from '../../lib/scheduler'
 import { pointsForBye, pointsForPlacement } from '../../lib/scoring'
 import { ordinal } from '../../lib/label'
 import { activeArenas, activePlayers, finalShape, validateSetup } from '../../state/reducer'
@@ -15,6 +15,8 @@ export function SetupScreen() {
   const { t, dispatch } = useTournament()
   const { label } = useNames()
   const [showPreview, setShowPreview] = useState(false)
+  const [suggesting, setSuggesting] = useState(false)
+  const [suggestion, setSuggestion] = useState<{ rounds: number; verified: boolean; exact: boolean } | null>(null)
 
   const players = activePlayers(t)
   const arenas = activeArenas(t)
@@ -27,19 +29,33 @@ export function SetupScreen() {
 
   const pointsPreview = Array.from({ length: groupSize }, (_, i) => `${ordinal(i + 1)} ${pointsForPlacement(i + 1, groupSize)}`).join(' · ')
 
+  const minRounds = minRoundsForFullCoverage(players.length, arenas.length, groupSize)
   const hints: string[] = []
-  if (players.length >= 2 && arenas.length >= 1 && groupSize >= 2) {
-    if (shape.groups > 0) {
-      hints.push(
-        `${players.length} players ÷ ${groupSize} = ${shape.groups} ${shape.groups === 1 ? 'group' : 'groups'} per round on ${shape.groups} of ${arenas.length} ${label(arenas.length).toLowerCase()}` +
-          (shape.byes ? `; ${shape.byes} ${shape.byes === 1 ? 'player sits' : 'players sit'} out each round.` : '.'),
-      )
-      if (shape.byes === 0) {
-        if (roundCount === arenas.length) hints.push(`${roundCount} rounds ⇒ every player can play every ${label(1).toLowerCase()} exactly once.`)
-        else if (roundCount > arenas.length) hints.push(`${roundCount} rounds ⇒ every player can play every ${label(1).toLowerCase()} at least once.`)
-        else hints.push(`${roundCount} rounds ⇒ each player will see ${roundCount} of the ${arenas.length} ${label(arenas.length).toLowerCase()}.`)
-      }
+  if (players.length >= 2 && arenas.length >= 1 && groupSize >= 2 && shape.groups > 0) {
+    hints.push(
+      `${players.length} players ÷ ${groupSize} = ${shape.groups} ${shape.groups === 1 ? 'group' : 'groups'} per round on ${shape.groups} of ${arenas.length} ${label(arenas.length).toLowerCase()}` +
+        (shape.byes ? `; ${shape.byes} ${shape.byes === 1 ? 'player sits' : 'players sit'} out each round.` : '.'),
+    )
+    if (minRounds !== null) {
+      if (roundCount < minRounds) hints.push(`Everyone needs at least ${minRounds} rounds to play every ${label(1).toLowerCase()}; with ${roundCount} some ${label(2).toLowerCase()} are missed.`)
+      else if (roundCount === minRounds) hints.push(`${roundCount} rounds is the minimum for everyone to play every ${label(1).toLowerCase()}${shape.byes === 0 ? ' — exactly once' : ''}.`)
+      else hints.push(`${roundCount} rounds ⇒ everyone can play every ${label(1).toLowerCase()} (${minRounds} would be enough for one visit each).`)
     }
+  }
+
+  const suggest = () => {
+    setSuggesting(true)
+    // Let the button repaint before the scheduler runs for a few hundred ms.
+    setTimeout(() => {
+      const result = suggestRounds(
+        players.map((p) => p.id),
+        arenas.map((a) => a.id),
+        groupSize,
+      )
+      setSuggestion(result)
+      if (result) dispatch({ type: 'UPDATE_SETTINGS', settings: { roundCount: result.rounds } })
+      setSuggesting(false)
+    }, 20)
   }
 
   return (
@@ -105,6 +121,20 @@ export function SetupScreen() {
           onChange={(n) => dispatch({ type: 'UPDATE_SETTINGS', settings: { groupSize: n } })}
         />
         <Stepper label="Rounds" value={roundCount} min={1} max={30} onChange={(n) => dispatch({ type: 'UPDATE_SETTINGS', settings: { roundCount: n } })} />
+        {minRounds !== null && (
+          <div className="row">
+            <button type="button" className="btn btn-sm" disabled={suggesting} onClick={suggest}>
+              {suggesting ? 'Checking…' : `Suggest rounds so everyone plays every ${label(1).toLowerCase()}`}
+            </button>
+          </div>
+        )}
+        {suggestion && suggestion.rounds === roundCount && (
+          <p className="hint">
+            {suggestion.verified
+              ? `✓ Checked with the scheduler: in ${suggestion.rounds} rounds every player plays every ${label(1).toLowerCase()}${suggestion.exact ? ' exactly once' : ' at least once'}.`
+              : `Could not confirm full coverage within a few extra rounds; ${suggestion.rounds} is the theoretical minimum.`}
+          </p>
+        )}
         <label className="stepper">
           <span className="stepper-label">Points for sitting out</span>
           <select className="input" style={{ width: 'auto' }} value={byePoints} onChange={(e) => dispatch({ type: 'UPDATE_SETTINGS', settings: { byePoints: e.target.value as 'average' | 'zero' } })}>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeSchedule, generateRounds, roundShape } from '../scheduler'
+import { describeSchedule, generateRounds, minRoundsForFullCoverage, roundShape, suggestRounds } from '../scheduler'
 import type { Arena, Player, Round } from '../../types'
 
 const ids = (prefix: string, n: number) => Array.from({ length: n }, (_, i) => `${prefix}${i + 1}`)
@@ -119,5 +119,22 @@ describe('generateRounds', () => {
 
   it('throws when no group can be formed', () => {
     expect(() => generateRounds({ playerIds: ['p1', 'p2', 'p3'], arenaIds: ['a1'], groupSize: 4, roundsToGenerate: 1, history: [], seed: 1 })).toThrow()
+  })
+
+  it('suggests the fewest rounds for everyone to play every arena', () => {
+    expect(minRoundsForFullCoverage(8, 4, 4)).toBe(4)
+    expect(minRoundsForFullCoverage(8, 4, 2)).toBe(4)
+    expect(minRoundsForFullCoverage(7, 4, 4)).toBe(7)
+    expect(minRoundsForFullCoverage(12, 2, 4)).toBe(3)
+    expect(minRoundsForFullCoverage(3, 2, 4)).toBeNull()
+
+    expect(suggestRounds(ids('p', 8), ids('a', 4), 4)).toEqual({ rounds: 4, verified: true, exact: true })
+    expect(suggestRounds(ids('p', 8), ids('a', 4), 2)).toEqual({ rounds: 4, verified: true, exact: true })
+    const seven = suggestRounds(ids('p', 7), ids('a', 4), 4)!
+    expect(seven.verified).toBe(true)
+    expect(seven.rounds).toBeGreaterThanOrEqual(7)
+    const twelve = suggestRounds(ids('p', 12), ids('a', 2), 4)!
+    expect(twelve.verified).toBe(true)
+    expect(twelve.rounds).toBe(3)
   })
 })

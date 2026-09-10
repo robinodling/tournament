@@ -514,3 +514,38 @@ export function describeSchedule(t: Pick<Tournament, 'players' | 'arenas' | 'rou
     byesMax: P ? Math.max(...byes) : 0,
   }
 }
+
+/**
+ * Fewest rounds in which every player can play every arena: each round `G·k`
+ * of the `P` players get one arena-play, and everyone needs `A` of them.
+ * Null when no group can be formed. This is a lower bound — see suggestRounds.
+ */
+export function minRoundsForFullCoverage(playerCount: number, arenaCount: number, groupSize: number): number | null {
+  const { groups } = roundShape(playerCount, arenaCount, groupSize)
+  if (groups < 1 || arenaCount < 1) return null
+  return Math.ceil((arenaCount * playerCount) / (groups * groupSize))
+}
+
+export interface RoundSuggestion {
+  rounds: number
+  /** The scheduler produced a schedule where everyone plays every arena at least once. */
+  verified: boolean
+  /** …and exactly once. */
+  exact: boolean
+}
+
+/**
+ * The lower bound, checked against the real scheduler; steps up a few rounds if
+ * the bound turns out not to be achievable for these numbers.
+ */
+export function suggestRounds(playerIds: Id[], arenaIds: Id[], groupSize: number, seed = 1, maxExtra = 3): RoundSuggestion | null {
+  const min = minRoundsForFullCoverage(playerIds.length, arenaIds.length, groupSize)
+  if (min === null) return null
+  const players = playerIds.map((id) => ({ id, name: id, active: true }))
+  const arenas = arenaIds.map((id) => ({ id, name: id, active: true }))
+  for (let rounds = min; rounds <= min + maxExtra; rounds++) {
+    const q = describeSchedule({ players, arenas, rounds: generateRounds({ playerIds, arenaIds, groupSize, roundsToGenerate: rounds, history: [], seed }) })
+    if (q.everyoneAllArenas) return { rounds, verified: true, exact: q.everyoneAllArenasOnce }
+  }
+  return { rounds: min, verified: false, exact: false }
+}
