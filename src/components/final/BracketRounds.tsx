@@ -1,6 +1,6 @@
 import { matchLabel, roundName } from '../../lib/label'
 import { activeArenas, isReady, matchSlots, pickRandomArena } from '../../state/reducer'
-import { useNames, useTournament } from '../../state/TournamentContext'
+import { useCanEdit, useNames, useTournament } from '../../state/TournamentContext'
 import type { Bracket, Group, Id } from '../../types'
 import { MatchCard } from './MatchCard'
 
@@ -14,6 +14,7 @@ interface Props {
 export function BracketRounds({ bracket, compact, onEdit }: Props) {
   const { t, dispatch, readOnly } = useTournament()
   const { label } = useNames()
+  const canEdit = useCanEdit()
   const arenas = activeArenas(t)
   const seedOf = (id: Id) => {
     const i = bracket.seeds.indexOf(id)
@@ -88,7 +89,7 @@ export function BracketRounds({ bracket, compact, onEdit }: Props) {
                     seedOf={seedOf}
                     compact={compact}
                     controls={controlsFor(m, context)}
-                    onClick={onEdit && m.playerIds.length >= 2 ? () => onEdit(m, context) : undefined}
+                    onClick={onEdit && m.playerIds.length >= 2 && canEdit(m) ? () => onEdit(m, context) : undefined}
                   />
                 </div>
               ))}

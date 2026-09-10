@@ -102,7 +102,10 @@ The only secret Firebase has — the Admin SDK service-account key — is never 
 
 The Firebase client is loaded lazily, only when a room is used; without a config the feature
 is simply hidden. Rooms are created from *Manage → Live scoring*; players open the shared link
-(`…/tournament/?room=CODE`).
+(`…/tournament/?room=CODE`), pick their own name (or *Just watching*) and can then send results
+only for the groups and matches they play in. That gate is client-side — the organiser's app
+validates every incoming result and can overrule it — which is plenty for friends and keeps the
+database rules simple.
 
 ## Development
 

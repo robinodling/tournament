@@ -785,3 +785,14 @@ kbd {
   background: var(--muted);
   box-shadow: none;
 }
+
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font: inherit;
+  font-size: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

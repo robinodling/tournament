@@ -1,4 +1,4 @@
-import type { Id } from '../types'
+import type { Group, Id } from '../types'
 
 /** Unambiguous characters only (no 0/O, 1/I). */
 export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -55,4 +55,34 @@ export function saveApplied(code: string, applied: Record<string, number>): void
 /** The Firebase client is only loaded when a room is actually used. */
 export function loadSync() {
   return import('./sync')
+}
+
+/** Who this phone is in a room: a player id, null for "just watching", undefined if not chosen yet. */
+export type ViewerIdentity = { playerId: Id | null }
+
+const VIEWER_KEY = (code: string) => `tournament:viewer:${code}`
+
+export function loadViewerIdentity(code: string): ViewerIdentity | undefined {
+  try {
+    const raw = localStorage.getItem(VIEWER_KEY(code))
+    if (!raw) return undefined
+    const parsed = JSON.parse(raw) as { playerId?: unknown }
+    return { playerId: typeof parsed.playerId === 'string' ? parsed.playerId : null }
+  } catch {
+    return undefined
+  }
+}
+
+export function saveViewerIdentity(code: string, identity: ViewerIdentity | undefined): void {
+  try {
+    if (identity === undefined) localStorage.removeItem(VIEWER_KEY(code))
+    else localStorage.setItem(VIEWER_KEY(code), JSON.stringify(identity))
+  } catch {
+    /* ignore */
+  }
+}
+
+/** A viewer may send a result only for a group they play in; spectators (null) never can. */
+export function canSubmitFor(viewerPlayerId: Id | null | undefined, group: Group): boolean {
+  return typeof viewerPlayerId === 'string' && group.playerIds.includes(viewerPlayerId)
 }

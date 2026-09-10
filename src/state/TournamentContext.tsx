@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, type Dispatch, type ReactNode } from 'react'
 import { plural } from '../lib/label'
+import { canSubmitFor } from '../lib/roomSync'
 import { loadTournament, requestPersistentStorage, saveTournament } from '../lib/storage'
-import type { Id, Tournament } from '../types'
+import type { Group, Id, Tournament } from '../types'
 import { initialTournament, reducer, type Action } from './reducer'
 
 interface Ctx {
@@ -9,6 +10,8 @@ interface Ctx {
   dispatch: Dispatch<Action>
   /** Viewer mode (live room): no local mutations, results are sent to the organiser instead. */
   readOnly: boolean
+  /** In viewer mode: the player this phone claimed, or null when just watching. */
+  viewerPlayerId: Id | null
 }
 
 const TournamentCtx = createContext<Ctx | null>(null)
@@ -48,7 +51,7 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const value = useMemo(() => (state ? { t: state, dispatch, readOnly: false } : null), [state])
+  const value = useMemo(() => (state ? { t: state, dispatch, readOnly: false, viewerPlayerId: null } : null), [state])
   if (!value) return <div className="loading">Loading…</div>
   return <TournamentCtx.Provider value={value}>{children}</TournamentCtx.Provider>
 }
@@ -56,9 +59,15 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
 const noop: Dispatch<Action> = () => {}
 
 /** Read-only tournament from a live room (viewer mode). */
-export function StaticTournamentProvider({ t, children }: { t: Tournament; children: ReactNode }) {
-  const value = useMemo(() => ({ t, dispatch: noop, readOnly: true }), [t])
+export function StaticTournamentProvider({ t, viewerPlayerId, children }: { t: Tournament; viewerPlayerId: Id | null; children: ReactNode }) {
+  const value = useMemo(() => ({ t, dispatch: noop, readOnly: true, viewerPlayerId }), [t, viewerPlayerId])
   return <TournamentCtx.Provider value={value}>{children}</TournamentCtx.Provider>
+}
+
+/** Whether this device may enter/send a result for a group: always for the organiser, own groups only for a claimed viewer. */
+export function useCanEdit(): (group: Group) => boolean {
+  const { readOnly, viewerPlayerId } = useTournament()
+  return useCallback((group: Group) => (readOnly ? canSubmitFor(viewerPlayerId, group) : true), [readOnly, viewerPlayerId])
 }
 
 export function useTournament(): Ctx {

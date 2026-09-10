@@ -6,7 +6,7 @@ import { RankingSheet } from '../round/RankingSheet'
 import { BracketRounds } from './BracketRounds'
 
 export function BracketScreen() {
-  const { t, dispatch, readOnly } = useTournament()
+  const { t, dispatch, readOnly, viewerPlayerId } = useTournament()
   const { label } = useNames()
   const [editing, setEditing] = useState<{ group: Group; context: string } | null>(null)
   const bracket = t.final?.bracket
@@ -35,7 +35,7 @@ export function BracketScreen() {
 
       {readOnly ? (
         <p className="hint" style={{ textAlign: 'center' }}>
-          Tap your match to send who won to the organiser.
+          {viewerPlayerId === null ? "You're watching. Results are entered by the players and the organiser." : 'Tap your match to send who won to the organiser.'}
         </p>
       ) : complete ? (
         <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => dispatch({ type: 'FINISH' })}>

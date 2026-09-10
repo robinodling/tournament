@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useNames } from '../../state/TournamentContext'
+import { useNames, useTournament } from '../../state/TournamentContext'
 import type { Group, Id } from '../../types'
 
 interface Props {
@@ -17,6 +17,7 @@ interface Props {
 
 export function MatchCard({ match, slots, placeholders, seedOf, onClick, compact, controls }: Props) {
   const { player, arena } = useNames()
+  const { readOnly } = useTournament()
   const bye = match.playerIds.length === 1
   const done = match.result !== undefined && !bye
   const ready = match.playerIds.length >= 2 && !done
@@ -46,7 +47,7 @@ export function MatchCard({ match, slots, placeholders, seedOf, onClick, compact
           ) : bye ? (
             <span className="chip">Advances</span>
           ) : ready && onClick ? (
-            <span className="chip">Tap to enter result</span>
+            <span className="chip">{readOnly ? 'Your match · tap to send' : 'Tap to enter result'}</span>
           ) : null)}
       </div>
       {controls && !compact && ready && (

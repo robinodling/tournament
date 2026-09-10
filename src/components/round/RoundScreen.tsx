@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { isComplete } from '../../state/reducer'
-import { useNames, useTournament } from '../../state/TournamentContext'
+import { useCanEdit, useNames, useTournament } from '../../state/TournamentContext'
 import type { Group } from '../../types'
 import { GroupCard } from './GroupCard'
 import { RankingSheet } from './RankingSheet'
 import { WhoPlaysWhere } from './WhoPlaysWhere'
 
 export function RoundScreen() {
-  const { t, dispatch, readOnly } = useTournament()
+  const { t, dispatch, readOnly, viewerPlayerId } = useTournament()
   const { player } = useNames()
+  const canEdit = useCanEdit()
   const [editing, setEditing] = useState<Group | null>(null)
   const [showWho, setShowWho] = useState(false)
 
@@ -56,7 +57,7 @@ export function RoundScreen() {
 
       <div className="stack">
         {round.groups.map((g) => (
-          <GroupCard key={g.id} group={g} onClick={() => setEditing(g)} />
+          <GroupCard key={g.id} group={g} onClick={canEdit(g) ? () => setEditing(g) : undefined} />
         ))}
         {round.byePlayerIds.length > 0 && (
           <div className="card bye-card">
@@ -72,7 +73,13 @@ export function RoundScreen() {
 
       {readOnly ? (
         <p className="hint" style={{ textAlign: 'center' }}>
-          {complete ? 'All results are in — waiting for the organiser.' : 'Tap your group to send its result to the organiser.'}
+          {complete
+            ? 'All results are in — waiting for the organiser.'
+            : viewerPlayerId === null
+              ? "You're watching. Results are entered by the players and the organiser."
+              : round.byePlayerIds.includes(viewerPlayerId)
+                ? 'You sit out this round.'
+                : 'Tap your group to send its result to the organiser.'}
         </p>
       ) : complete ? (
         <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => dispatch({ type: 'NEXT_ROUND' })}>

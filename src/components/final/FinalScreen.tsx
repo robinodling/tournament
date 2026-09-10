@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { tierName } from '../../lib/label'
 import { activeArenas, isFinalComplete, pickRandomArena } from '../../state/reducer'
-import { useNames, useTournament } from '../../state/TournamentContext'
+import { useCanEdit, useNames, useTournament } from '../../state/TournamentContext'
 import type { Group } from '../../types'
 import { GroupCard } from '../round/GroupCard'
 import { RankingSheet } from '../round/RankingSheet'
 import { BracketScreen } from './BracketScreen'
 
 export function FinalScreen() {
-  const { t, dispatch, readOnly } = useTournament()
+  const { t, dispatch, readOnly, viewerPlayerId } = useTournament()
   const { label } = useNames()
+  const canEdit = useCanEdit()
   const [editing, setEditing] = useState<{ group: Group; context: string } | null>(null)
   const final = t.final
   if (!final) return null
@@ -77,14 +78,14 @@ export function FinalScreen() {
                 </button>
               </div>
             )}
-            <GroupCard group={g} seeded onClick={() => setEditing({ group: g, context: name })} />
+            <GroupCard group={g} seeded onClick={canEdit(g) ? () => setEditing({ group: g, context: name }) : undefined} />
           </div>
         )
       })}
 
       {readOnly ? (
         <p className="hint" style={{ textAlign: 'center' }}>
-          Tap your final to send its result to the organiser.
+          {viewerPlayerId === null ? "You're watching. Results are entered by the players and the organiser." : 'Tap your final to send its result to the organiser.'}
         </p>
       ) : complete ? (
         <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => dispatch({ type: 'FINISH' })}>

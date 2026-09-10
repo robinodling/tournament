@@ -1,6 +1,6 @@
 import { pointsForPlacement, pts } from '../../lib/scoring'
 import { ordinal } from '../../lib/label'
-import { useNames } from '../../state/TournamentContext'
+import { useNames, useTournament } from '../../state/TournamentContext'
 import type { Group } from '../../types'
 
 interface Props {
@@ -13,6 +13,7 @@ interface Props {
 
 export function GroupCard({ group, onClick, compact, seeded }: Props) {
   const { player, arena } = useNames()
+  const { readOnly } = useTournament()
   const done = group.result !== undefined
   const order = group.result ?? group.playerIds
   const k = group.playerIds.length
@@ -34,7 +35,7 @@ export function GroupCard({ group, onClick, compact, seeded }: Props) {
         <span className={compact ? 'arena-name small' : 'arena-name'} style={compact ? { fontSize: '1rem' } : undefined}>
           {arena(group.arenaId)}
         </span>
-        {!compact && (done ? <span className="chip chip-ok">✓ Done</span> : onClick ? <span className="chip">Tap to enter result</span> : null)}
+        {!compact && (done ? <span className="chip chip-ok">✓ Done</span> : onClick ? <span className="chip">{readOnly ? 'Your group · tap to send result' : 'Tap to enter result'}</span> : null)}
       </div>
       <div>
         {order.map((pid, i) => (

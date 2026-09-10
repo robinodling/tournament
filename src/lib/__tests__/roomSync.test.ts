@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { newRoomCode, normalizeRoomCode, pickNewResults, ROOM_CODE_ALPHABET } from '../roomSync'
+import { canSubmitFor, newRoomCode, normalizeRoomCode, pickNewResults, ROOM_CODE_ALPHABET } from '../roomSync'
 
 describe('room codes', () => {
   it('generates 6 unambiguous characters', () => {
@@ -28,5 +28,15 @@ describe('pickNewResults', () => {
     ]
     expect(pickNewResults(results, { g1: 100 }).map((r) => r.groupId)).toEqual(['g2'])
     expect(pickNewResults(results, {}).map((r) => r.groupId)).toEqual(['g1', 'g2'])
+  })
+})
+
+describe('canSubmitFor', () => {
+  const group = { id: 'g', arenaId: 'a', playerIds: ['p1', 'p2'] }
+  it('only players in the group may send its result; spectators never', () => {
+    expect(canSubmitFor('p1', group)).toBe(true)
+    expect(canSubmitFor('p3', group)).toBe(false)
+    expect(canSubmitFor(null, group)).toBe(false)
+    expect(canSubmitFor(undefined, group)).toBe(false)
   })
 })
