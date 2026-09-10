@@ -42,9 +42,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api -X PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow \
-            || echo "::warning::Could not switch the Pages source. Set Settings → Pages → Source to 'GitHub Actions' manually."
-          gh api "repos/${GITHUB_REPOSITORY}/pages" --jq '"Pages source: " + .build_type' || true
+          source=$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq .build_type 2>/dev/null || echo unknown)
+          echo "Pages source: $source"
+          if [ "$source" = "legacy" ]; then
+            gh api -X PUT "repos/${GITHUB_REPOSITORY}/pages" -f build_type=workflow 2>/dev/null \
+              && echo "Switched Pages source to GitHub Actions" \
+              || echo "::warning::Pages source is 'Deploy from a branch', so GitHub's own branch build races this deploy and can publish the unbuilt source. A repo admin must set Settings → Pages → Source to 'GitHub Actions'."
+          fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
