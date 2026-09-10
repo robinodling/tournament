@@ -7,7 +7,7 @@ import { RankingSheet } from './RankingSheet'
 import { WhoPlaysWhere } from './WhoPlaysWhere'
 
 export function RoundScreen() {
-  const { t, dispatch } = useTournament()
+  const { t, dispatch, readOnly } = useTournament()
   const { player } = useNames()
   const [editing, setEditing] = useState<Group | null>(null)
   const [showWho, setShowWho] = useState(false)
@@ -28,7 +28,7 @@ export function RoundScreen() {
   return (
     <div className="screen">
       <div className="round-nav">
-        <button type="button" className="btn btn-ghost" disabled={idx === 0} onClick={() => dispatch({ type: 'SET_CURRENT_ROUND', index: idx - 1 })} aria-label="Previous round">
+        <button type="button" className="btn btn-ghost" disabled={readOnly || idx === 0} style={readOnly ? { visibility: 'hidden' } : undefined} onClick={() => dispatch({ type: 'SET_CURRENT_ROUND', index: idx - 1 })} aria-label="Previous round">
           ‹
         </button>
         <div className="stack" style={{ alignItems: 'center', gap: 6 }}>
@@ -39,7 +39,7 @@ export function RoundScreen() {
             ))}
           </div>
         </div>
-        <button type="button" className="btn btn-ghost" disabled={isLast} onClick={() => dispatch({ type: 'SET_CURRENT_ROUND', index: idx + 1 })} aria-label="Next round">
+        <button type="button" className="btn btn-ghost" disabled={readOnly || isLast} style={readOnly ? { visibility: 'hidden' } : undefined} onClick={() => dispatch({ type: 'SET_CURRENT_ROUND', index: idx + 1 })} aria-label="Next round">
           ›
         </button>
       </div>
@@ -70,7 +70,11 @@ export function RoundScreen() {
         )}
       </div>
 
-      {complete ? (
+      {readOnly ? (
+        <p className="hint" style={{ textAlign: 'center' }}>
+          {complete ? 'All results are in — waiting for the organiser.' : 'Tap your group to send its result to the organiser.'}
+        </p>
+      ) : complete ? (
         <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => dispatch({ type: 'NEXT_ROUND' })}>
           {isLast ? '🏁 Finish tournament' : `Next round →`}
         </button>

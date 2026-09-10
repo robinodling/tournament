@@ -8,7 +8,7 @@ import { RankingSheet } from '../round/RankingSheet'
 import { BracketScreen } from './BracketScreen'
 
 export function FinalScreen() {
-  const { t, dispatch } = useTournament()
+  const { t, dispatch, readOnly } = useTournament()
   const { label } = useNames()
   const [editing, setEditing] = useState<{ group: Group; context: string } | null>(null)
   const final = t.final
@@ -30,7 +30,7 @@ export function FinalScreen() {
           Seeded from the standings after {t.rounds.length} rounds.{' '}
           {total > 1 ? 'Placements decide the overall order within each tier.' : `Placements decide positions 1–${k}.`}
         </p>
-        {unplayed > 1 && arenas.length > 1 && (
+        {!readOnly && unplayed > 1 && arenas.length > 1 && (
           <button type="button" className="btn btn-sm" onClick={() => dispatch({ type: 'RANDOMIZE_FINAL_ARENAS' })}>
             🎲 Random {label(2).toLowerCase()} for all finals
           </button>
@@ -49,7 +49,7 @@ export function FinalScreen() {
                 positions {first}–{offset}
               </span>
             </div>
-            {!g.result && arenas.length > 1 && (
+            {!readOnly && !g.result && arenas.length > 1 && (
               <div className="row">
                 <select
                   className="input grow"
@@ -82,7 +82,11 @@ export function FinalScreen() {
         )
       })}
 
-      {complete ? (
+      {readOnly ? (
+        <p className="hint" style={{ textAlign: 'center' }}>
+          Tap your final to send its result to the organiser.
+        </p>
+      ) : complete ? (
         <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => dispatch({ type: 'FINISH' })}>
           🏁 Finish tournament
         </button>

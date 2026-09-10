@@ -7,6 +7,8 @@ import { initialTournament, reducer, type Action } from './reducer'
 interface Ctx {
   t: Tournament
   dispatch: Dispatch<Action>
+  /** Viewer mode (live room): no local mutations, results are sent to the organiser instead. */
+  readOnly: boolean
 }
 
 const TournamentCtx = createContext<Ctx | null>(null)
@@ -46,8 +48,16 @@ export function TournamentProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const value = useMemo(() => (state ? { t: state, dispatch } : null), [state])
+  const value = useMemo(() => (state ? { t: state, dispatch, readOnly: false } : null), [state])
   if (!value) return <div className="loading">Loading…</div>
+  return <TournamentCtx.Provider value={value}>{children}</TournamentCtx.Provider>
+}
+
+const noop: Dispatch<Action> = () => {}
+
+/** Read-only tournament from a live room (viewer mode). */
+export function StaticTournamentProvider({ t, children }: { t: Tournament; children: ReactNode }) {
+  const value = useMemo(() => ({ t, dispatch: noop, readOnly: true }), [t])
   return <TournamentCtx.Provider value={value}>{children}</TournamentCtx.Provider>
 }
 

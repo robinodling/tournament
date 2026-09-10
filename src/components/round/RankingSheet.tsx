@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { loadSync } from '../../lib/roomSync'
 import { pointsForPlacement, pts } from '../../lib/scoring'
 import { ordinal } from '../../lib/label'
 import { useNames, useTournament } from '../../state/TournamentContext'
@@ -16,12 +17,16 @@ interface Props {
 
 /** Tap players in finishing order. */
 export function RankingSheet({ context, group, showPoints = true, onClose }: Props) {
-  const { dispatch } = useTournament()
+  const { t, dispatch, readOnly } = useTournament()
   const { player, arena } = useNames()
   const [order, setOrder] = useState<Id[]>([])
+  const [sending, setSending] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle')
+  const [sendError, setSendError] = useState<string | null>(null)
 
   useEffect(() => {
     setOrder(group?.result ?? [])
+    setSending('idle')
+    setSendError(null)
   }, [group])
 
   if (!group) return null
@@ -30,6 +35,23 @@ export function RankingSheet({ context, group, showPoints = true, onClose }: Pro
   const complete = order.length === k
 
   const save = () => {
+    if (readOnly) {
+      // Viewer: send to the organiser's room instead of changing anything locally.
+      const code = t.room?.code
+      if (!code) return
+      setSending('sending')
+      loadSync()
+        .then((s) => s.submitResult(code, group.id, order))
+        .then(() => {
+          setSending('sent')
+          setTimeout(onClose, 900)
+        })
+        .catch((e: Error) => {
+          setSending('error')
+          setSendError(e.message)
+        })
+      return
+    }
     dispatch({ type: 'SET_RESULT', groupId: group.id, order })
     onClose()
   }
@@ -81,8 +103,10 @@ export function RankingSheet({ context, group, showPoints = true, onClose }: Pro
           ))}
         </div>
       )}
+      {readOnly && <p className="hint small">This is sent to the organiser, who can still correct it.</p>}
+      {sendError && <p className="problem">Could not send: {sendError}</p>}
       <div className="row">
-        {group.result && (
+        {group.result && !readOnly && (
           <button type="button" className="btn btn-danger" onClick={clear}>
             Clear
           </button>
@@ -90,8 +114,8 @@ export function RankingSheet({ context, group, showPoints = true, onClose }: Pro
         <button type="button" className="btn grow" onClick={onClose}>
           Cancel
         </button>
-        <button type="button" className="btn btn-primary grow" disabled={!complete} onClick={save}>
-          Save result
+        <button type="button" className="btn btn-primary grow" disabled={!complete || sending === 'sending' || sending === 'sent'} onClick={save}>
+          {readOnly ? (sending === 'sending' ? 'Sending…' : sending === 'sent' ? '✓ Sent' : 'Send result') : 'Save result'}
         </button>
       </div>
     </Sheet>

@@ -70,6 +70,40 @@ Installed apps update themselves: the worker is network-first, so a new release 
 next time the app is opened online; if a release lands while the app is open, a "new version
 is ready — Reload" banner appears. No reinstall needed.
 
+## Live scoring (optional, Firebase)
+
+Players can follow the tournament on their own phones and send their group's result to the
+organiser. The organiser's device stays the source of truth: it publishes the tournament to a
+*room* and applies incoming results through the normal `SET_RESULT` path (so they are validated
+and can be corrected).
+
+### Why the Firebase config is committed
+
+The web-app config (`apiKey`, `projectId`, `databaseURL`, `appId`) identifies the project; it is
+not a secret and every Firebase site ships it in its bundle. Access control is enforced
+server-side by `database.rules.json`:
+
+- nothing is readable or writable by default, and rooms cannot be listed;
+- a room is readable by anyone who knows its 6-character code (~10⁹ combinations);
+- `state` is writable only by the anonymous identity that created the room (`adminUid`, written
+  once);
+- `results/{groupId}` is writable by anyone with the code, with the shape and size validated.
+
+The only secret Firebase has — the Admin SDK service-account key — is never used here.
+
+### One-time setup
+
+1. [Firebase console](https://console.firebase.google.com) → *Add project* (Analytics off).
+2. *Build → Realtime Database → Create database* (europe-west1, **locked mode**), then paste
+   `database.rules.json` under *Rules* and publish.
+3. *Build → Authentication → Sign-in method → Anonymous → Enable.*
+4. *Authentication → Settings → Authorized domains* → add `robinodling.github.io`.
+5. *Project settings → Your apps → Web* → copy the config into `src/lib/firebaseConfig.ts`.
+
+The Firebase client is loaded lazily, only when a room is used; without a config the feature
+is simply hidden. Rooms are created from *Manage → Live scoring*; players open the shared link
+(`…/tournament/?room=CODE`).
+
 ## Development
 
 ```sh

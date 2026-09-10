@@ -51,6 +51,11 @@ export interface Settings {
   seed: number
 }
 
+export interface Room {
+  code: string
+  createdAt: number
+}
+
 export interface Bracket {
   /** Number of slots (power of two); slots beyond `seeds.length` are byes for the top seeds. */
   size: number
@@ -82,6 +87,8 @@ export interface Tournament {
   settings: Settings
   rounds: Round[]
   final?: Final
+  /** Live-scoring room (Firebase) this tournament is shared in, if any. */
+  room?: Room
   currentRound: number
   createdAt: number
   updatedAt: number

@@ -2,7 +2,7 @@ import { newId } from '../lib/id'
 import { mulberry32, randomSeed, shuffle } from '../lib/rng'
 import { generateRounds, roundShape } from '../lib/scheduler'
 import { computeStandings } from '../lib/scoring'
-import type { Arena, Bracket, Final, Group, Id, Player, Round, Settings, Tournament } from '../types'
+import type { Arena, Bracket, Final, Group, Id, Player, Room, Round, Settings, Tournament } from '../types'
 
 export type Action =
   | { type: 'HYDRATE'; tournament: Tournament }
@@ -33,6 +33,8 @@ export type Action =
   | { type: 'SKIP_FINAL' }
   | { type: 'FINISH' }
   | { type: 'REOPEN' }
+  | { type: 'SET_ROOM'; room: Room }
+  | { type: 'CLEAR_ROOM' }
 
 export function initialTournament(): Tournament {
   const now = Date.now()
@@ -676,6 +678,14 @@ export function reducer(state: Tournament | null, action: Action): Tournament | 
 
     case 'REOPEN':
       return t.phase === 'finished' ? touch({ ...t, phase: t.final ? 'final' : 'running' }) : t
+
+    case 'SET_ROOM':
+      return touch({ ...t, room: action.room })
+
+    case 'CLEAR_ROOM': {
+      const { room: _drop, ...rest } = t
+      return touch(rest)
+    }
 
     default:
       return t

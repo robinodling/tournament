@@ -12,7 +12,7 @@ interface Props {
 }
 
 export function BracketRounds({ bracket, compact, onEdit }: Props) {
-  const { t, dispatch } = useTournament()
+  const { t, dispatch, readOnly } = useTournament()
   const { label } = useNames()
   const arenas = activeArenas(t)
   const seedOf = (id: Id) => {
@@ -21,7 +21,7 @@ export function BracketRounds({ bracket, compact, onEdit }: Props) {
   }
 
   const controlsFor = (m: Group, context: string) => {
-    if (compact || !onEdit || arenas.length < 2 || !isReady(m)) return undefined
+    if (compact || readOnly || !onEdit || arenas.length < 2 || !isReady(m)) return undefined
     return (
       <>
         <select

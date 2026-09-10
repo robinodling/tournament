@@ -5,6 +5,7 @@ import type { FinalStage } from '../../types'
 import { useNames, useTournament } from '../../state/TournamentContext'
 import { InstallCard } from '../common/InstallCard'
 import { Stepper } from '../common/Stepper'
+import { LiveScoringSection } from './LiveScoringSection'
 import { RestoreSection } from './RestoreSection'
 
 function unlockedRange(rounds: { groups: { result?: unknown }[] }[]): string {
@@ -245,6 +246,8 @@ export function ManageScreen() {
         </p>
       </section>
       )}
+
+      {!setup && <LiveScoringSection />}
 
       <section className="section">
         <h3 className="section-title">Install</h3>

@@ -6,7 +6,7 @@ import { RankingSheet } from '../round/RankingSheet'
 import { BracketRounds } from './BracketRounds'
 
 export function BracketScreen() {
-  const { t, dispatch } = useTournament()
+  const { t, dispatch, readOnly } = useTournament()
   const { label } = useNames()
   const [editing, setEditing] = useState<{ group: Group; context: string } | null>(null)
   const bracket = t.final?.bracket
@@ -24,7 +24,7 @@ export function BracketScreen() {
           {byes > 0 ? ` The top ${byes} ${byes === 1 ? 'seed skips' : 'seeds skip'} the first round.` : ''} Winners advance
           {bracket.bronze ? '; semifinal losers play for bronze.' : '.'}
         </p>
-        {playable.length > 1 && t.arenas.filter((a) => a.active).length > 1 && (
+        {!readOnly && playable.length > 1 && t.arenas.filter((a) => a.active).length > 1 && (
           <button type="button" className="btn btn-sm" onClick={() => dispatch({ type: 'RANDOMIZE_FINAL_ARENAS' })}>
             🎲 Random {label(2).toLowerCase()} for this round
           </button>
@@ -33,7 +33,11 @@ export function BracketScreen() {
 
       <BracketRounds bracket={bracket} onEdit={(group, context) => setEditing({ group, context })} />
 
-      {complete ? (
+      {readOnly ? (
+        <p className="hint" style={{ textAlign: 'center' }}>
+          Tap your match to send who won to the organiser.
+        </p>
+      ) : complete ? (
         <button type="button" className="btn btn-primary btn-lg btn-block" onClick={() => dispatch({ type: 'FINISH' })}>
           🏁 Finish tournament
         </button>

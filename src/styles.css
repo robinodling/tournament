@@ -761,3 +761,27 @@ kbd {
   border: 1px solid var(--border);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
 }
+
+/* ---------- live room ---------- */
+.room-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 1.8rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+}
+
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  margin-right: 4px;
+  vertical-align: middle;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent);
+}
+
+.live-dot.off {
+  background: var(--muted);
+  box-shadow: none;
+}

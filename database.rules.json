@@ -1,0 +1,26 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$code": {
+        ".read": "auth != null && $code.matches(/^[A-Z0-9]{6}$/)",
+        "adminUid": {
+          ".write": "auth != null && !data.exists() && newData.val() === auth.uid",
+          ".validate": "newData.isString()"
+        },
+        "state": {
+          ".write": "auth != null && root.child('rooms').child($code).child('adminUid').val() === auth.uid",
+          ".validate": "newData.isString() && newData.val().length < 300000"
+        },
+        "results": {
+          "$groupId": {
+            ".write": "auth != null && root.child('rooms').child($code).child('adminUid').exists() && $groupId.matches(/^[A-Za-z0-9-]{1,64}$/)",
+            ".validate": "newData.hasChildren(['order', 'at', 'by']) && newData.child('order').isString() && newData.child('order').val().length < 4000 && newData.child('by').val() === auth.uid"
+          }
+        },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

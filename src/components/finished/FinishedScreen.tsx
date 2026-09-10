@@ -7,7 +7,7 @@ import { useTournament } from '../../state/TournamentContext'
 import { StandingsTable } from '../standings/StandingsTable'
 
 export function FinishedScreen() {
-  const { t, dispatch } = useTournament()
+  const { t, dispatch, readOnly } = useTournament()
   const { rows, decidedByFinal, finalists } = computeFinalRanking(t)
   const finals = t.final?.groups ?? []
   const [copied, setCopied] = useState(false)
@@ -70,9 +70,11 @@ export function FinishedScreen() {
         <button type="button" className="btn grow" onClick={copy}>
           {copied ? '✓ Copied' : 'Copy standings as text'}
         </button>
-        <button type="button" className="btn grow" onClick={() => window.confirm('Start a new tournament? This one is kept in backups.') && dispatch({ type: 'RESET' })}>
-          New tournament
-        </button>
+        {!readOnly && (
+          <button type="button" className="btn grow" onClick={() => window.confirm('Start a new tournament? This one is kept in backups.') && dispatch({ type: 'RESET' })}>
+            New tournament
+          </button>
+        )}
       </div>
     </div>
   )

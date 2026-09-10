@@ -7,7 +7,10 @@ import { RoundScreen } from './components/round/RoundScreen'
 import { ScheduleScreen } from './components/schedule/ScheduleScreen'
 import { SetupScreen } from './components/setup/SetupScreen'
 import { StandingsScreen } from './components/standings/StandingsScreen'
+import { normalizeRoomCode } from './lib/roomSync'
 import { TournamentProvider, useTournament } from './state/TournamentContext'
+import { RoomSyncCtx, useRoomSync } from './state/useRoomSync'
+import { ViewerApp } from './ViewerApp'
 
 type Tab = 'setup' | 'round' | 'standings' | 'schedule' | 'manage'
 
@@ -32,8 +35,9 @@ const FINISHED_TABS: { id: Tab; label: string; icon: string }[] = [
 ]
 
 function Shell() {
-  const { t } = useTournament()
+  const { t, dispatch } = useTournament()
   const [tab, setTab] = useState<Tab>(t.phase === 'setup' ? 'setup' : 'round')
+  const sync = useRoomSync(t, dispatch)
 
   // Land on the right tab when the phase changes.
   useEffect(() => {
@@ -46,12 +50,19 @@ function Shell() {
   const active = tabs.some((x) => x.id === tab) ? tab : tabs[0].id
 
   return (
+    <RoomSyncCtx.Provider value={sync}>
     <div className="app">
       {t.phase !== 'setup' && (
         <header className="topbar">
           <h1 className="topbar-title">{t.name}</h1>
-          <span className="muted">
+          <span className="muted small" style={{ textAlign: 'right' }}>
             {t.phase === 'running' ? `Round ${t.currentRound + 1} of ${t.rounds.length}` : t.phase === 'final' ? 'Final stage' : 'Finished'}
+            {t.room && (
+              <>
+                <br />
+                <span className={`live-dot${sync.status === 'live' ? '' : ' off'}`} aria-hidden /> Room {t.room.code}
+              </>
+            )}
           </span>
         </header>
       )}
@@ -80,10 +91,14 @@ function Shell() {
         ))}
       </nav>
     </div>
+    </RoomSyncCtx.Provider>
   )
 }
 
+const roomFromUrl = normalizeRoomCode(new URLSearchParams(window.location.search).get('room'))
+
 export default function App() {
+  if (roomFromUrl) return <ViewerApp code={roomFromUrl} />
   return (
     <TournamentProvider>
       <Shell />
