@@ -9,9 +9,11 @@ interface Props {
   compact?: boolean
   /** Final groups: show seeding order and no points. */
   seeded?: boolean
+  /** The viewer's own group. */
+  highlight?: boolean
 }
 
-export function GroupCard({ group, onClick, compact, seeded }: Props) {
+export function GroupCard({ group, onClick, compact, seeded, highlight }: Props) {
   const { player, arena } = useNames()
   const { readOnly } = useTournament()
   const done = group.result !== undefined
@@ -20,7 +22,7 @@ export function GroupCard({ group, onClick, compact, seeded }: Props) {
 
   return (
     <div
-      className={`card${onClick ? ' tappable' : ''}${done ? ' done' : ''}`}
+      className={`card${onClick ? ' tappable' : ''}${done ? ' done' : ''}${highlight ? ' mine' : ''}`}
       onClick={onClick}
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}

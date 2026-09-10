@@ -13,9 +13,11 @@ interface Props {
   compact?: boolean
   /** Arena dropdown + dice, rendered in the header when the match is playable. */
   controls?: ReactNode
+  /** The viewer's own match. */
+  highlight?: boolean
 }
 
-export function MatchCard({ match, slots, placeholders, seedOf, onClick, compact, controls }: Props) {
+export function MatchCard({ match, slots, placeholders, seedOf, onClick, compact, controls, highlight }: Props) {
   const { player, arena } = useNames()
   const { readOnly } = useTournament()
   const bye = match.playerIds.length === 1
@@ -26,7 +28,7 @@ export function MatchCard({ match, slots, placeholders, seedOf, onClick, compact
 
   return (
     <div
-      className={`card match${tappable ? ' tappable' : ''}${done ? ' done' : ''}${bye ? ' bye-card' : ''}`}
+      className={`card match${tappable ? ' tappable' : ''}${done ? ' done' : ''}${bye ? ' bye-card' : ''}${highlight ? ' mine' : ''}`}
       onClick={tappable}
       role={tappable ? 'button' : undefined}
       tabIndex={tappable ? 0 : undefined}

@@ -11,6 +11,30 @@ interface Props {
   onEdit?: (match: Group, context: string) => void
 }
 
+export interface BracketItem {
+  m: Group
+  context: string
+  slots: (Id | undefined)[]
+  placeholders: string[]
+  roundIndex: number
+}
+
+/** Every match of a round (bronze included in the last round) with its display data. */
+export function bracketItems(bracket: Bracket, r: number): BracketItem[] {
+  const matches = bracket.rounds[r]
+  const items: BracketItem[] = matches.map((m, i) => ({
+    m,
+    context: matchLabel(matches.length, i),
+    slots: matchSlots(bracket, r, i),
+    placeholders: r === 0 ? ['', ''] : [0, 1].map((s) => `Winner of ${matchLabel(bracket.rounds[r - 1].length, 2 * i + s)}`),
+    roundIndex: r,
+  }))
+  if (r === bracket.rounds.length - 1 && bracket.bronze) {
+    items.push({ m: bracket.bronze, context: 'Bronze match', slots: matchSlots(bracket, r, 0, true), placeholders: ['Loser of Semifinal 1', 'Loser of Semifinal 2'], roundIndex: r })
+  }
+  return items
+}
+
 export function BracketRounds({ bracket, compact, onEdit }: Props) {
   const { t, dispatch, readOnly } = useTournament()
   const { label } = useNames()
@@ -58,20 +82,7 @@ export function BracketRounds({ bracket, compact, onEdit }: Props) {
       {bracket.rounds.map((matches, r) => {
         const done = matches.every((m) => m.result !== undefined)
         const isFinalRound = r === lastIdx
-        const items: { m: Group; context: string; slots: (Id | undefined)[]; placeholders: string[] }[] = matches.map((m, i) => ({
-          m,
-          context: matchLabel(matches.length, i),
-          slots: matchSlots(bracket, r, i),
-          placeholders: r === 0 ? ['', ''] : [0, 1].map((s) => `Winner of ${matchLabel(bracket.rounds[r - 1].length, 2 * i + s)}`),
-        }))
-        if (isFinalRound && bracket.bronze) {
-          items.push({
-            m: bracket.bronze,
-            context: 'Bronze match',
-            slots: matchSlots(bracket, r, 0, true),
-            placeholders: ['Loser of Semifinal 1', 'Loser of Semifinal 2'],
-          })
-        }
+        const items = bracketItems(bracket, r)
         return (
           <section key={r} className="schedule-round">
             <div className="status-line">

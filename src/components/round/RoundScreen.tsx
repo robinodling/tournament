@@ -25,6 +25,10 @@ export function RoundScreen() {
   const complete = isComplete(round)
   const isLast = idx === t.rounds.length - 1
   const doneCount = round.groups.filter((g) => g.result).length
+  // Viewer: your own game first, the rest below.
+  const mine = readOnly && viewerPlayerId ? round.groups.filter((g) => g.playerIds.includes(viewerPlayerId)) : []
+  const others = mine.length ? round.groups.filter((g) => !mine.includes(g)) : round.groups
+  const sitsOut = readOnly && viewerPlayerId !== null && round.byePlayerIds.includes(viewerPlayerId)
 
   return (
     <div className="screen">
@@ -55,8 +59,26 @@ export function RoundScreen() {
       </div>
       {showWho && <WhoPlaysWhere round={round} />}
 
+      {(mine.length > 0 || sitsOut) && (
+        <section className="section">
+          <h3 className="section-title mine-title">
+            <span className="live-dot" aria-hidden /> Your game
+          </h3>
+          {mine.map((g) => (
+            <GroupCard key={g.id} group={g} highlight onClick={canEdit(g) ? () => setEditing(g) : undefined} />
+          ))}
+          {sitsOut && (
+            <div className="card bye-card">
+              <strong>You sit out this round.</strong>
+              <div className="muted small">You get the average points for the round.</div>
+            </div>
+          )}
+        </section>
+      )}
+
       <div className="stack">
-        {round.groups.map((g) => (
+        {(mine.length > 0 || sitsOut) && others.length > 0 && <h3 className="section-title">Other games</h3>}
+        {others.map((g) => (
           <GroupCard key={g.id} group={g} onClick={canEdit(g) ? () => setEditing(g) : undefined} />
         ))}
         {round.byePlayerIds.length > 0 && (

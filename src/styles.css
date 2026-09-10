@@ -796,3 +796,17 @@ kbd {
   text-decoration: underline;
   cursor: pointer;
 }
+
+/* ---------- viewer: own game ---------- */
+.card.mine {
+  border-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 9%, var(--surface));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 22%, transparent);
+}
+
+.mine-title {
+  color: var(--ok);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -22,6 +22,7 @@ export function FinalScreen() {
   const arenas = activeArenas(t)
   let offset = 0
   const unplayed = final.groups.filter((g) => !g.result).length
+  const myFinal = readOnly && viewerPlayerId ? final.groups.find((g) => g.playerIds.includes(viewerPlayerId)) : undefined
 
   return (
     <div className="screen">
@@ -38,10 +39,20 @@ export function FinalScreen() {
         )}
       </div>
 
+      {myFinal && (
+        <section className="section">
+          <h3 className="section-title mine-title">
+            <span className="live-dot" aria-hidden /> Your final · {tierName(final.groups.indexOf(myFinal), total)}
+          </h3>
+          <GroupCard group={myFinal} seeded highlight onClick={canEdit(myFinal) ? () => setEditing({ group: myFinal, context: tierName(final.groups.indexOf(myFinal), total) }) : undefined} />
+        </section>
+      )}
+      {myFinal && total > 1 && <h3 className="section-title">All finals</h3>}
       {final.groups.map((g, i) => {
         const first = offset + 1
         offset += g.playerIds.length
         const name = tierName(i, total)
+        if (g === myFinal && total === 1) return null
         return (
           <div key={g.id} className="stack" style={{ gap: 6 }}>
             <div className="status-line">
