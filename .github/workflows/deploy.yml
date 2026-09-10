@@ -9,6 +9,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: read # to see GitHub's own branch build for this commit
 
 concurrency:
   group: pages
@@ -60,5 +61,19 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # While the Pages source is still "Deploy from a branch", GitHub also runs its own
+      # build of the repo root for every push and whichever deploy lands last wins. Wait
+      # for that run to finish so the built app is always the one that stays published.
+      - name: Wait for any other deployment of this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 30); do
+            pending=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}&per_page=50" \
+              --jq "[.workflow_runs[] | select(.id != ${GITHUB_RUN_ID} and (.status == \"queued\" or .status == \"in_progress\" or .status == \"waiting\" or .status == \"pending\" or .status == \"requested\"))] | length" 2>/dev/null || echo 0)
+            if [ "$pending" = "0" ]; then echo "No other run in progress for this commit."; break; fi
+            echo "Waiting for $pending other run(s) on this commit…"; sleep 10
+          done
+
       - id: deployment
         uses: actions/deploy-pages@v4
