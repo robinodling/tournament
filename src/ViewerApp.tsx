@@ -39,10 +39,11 @@ export function ViewerApp({ code }: { code: string }) {
       .catch(() => {})
   }, [])
   const registeredAs = state.status === 'live' && myUid ? state.t.players.find((p) => p.uid === myUid) : undefined
+  // A phone that registered is recognised without asking; remember that choice like a manual one.
+  const effectiveIdentity: ViewerIdentity | undefined = identity ?? (registeredAs ? { playerId: registeredAs.id } : undefined)
   useEffect(() => {
-    if (identity === undefined && registeredAs && state.status === 'live' && state.t.phase !== 'setup') choose({ playerId: registeredAs.id })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [identity, registeredAs?.id, state.status])
+    if (identity === undefined && registeredAs) saveViewerIdentity(code, { playerId: registeredAs.id })
+  }, [identity, registeredAs, code])
 
   useEffect(() => {
     if (!syncConfigured) {
@@ -94,12 +95,10 @@ export function ViewerApp({ code }: { code: string }) {
 
   const t = state.t
   const roster = t.players.filter((p) => p.active).sort((a, b) => a.name.localeCompare(b.name))
-  const claimed = identity?.playerId ? t.players.find((p) => p.id === identity.playerId) : undefined
+  const claimed = effectiveIdentity?.playerId ? t.players.find((p) => p.id === effectiveIdentity.playerId) : undefined
   if (t.phase === 'setup') return <JoinScreen code={code} t={t} myUid={myUid} />
-  // Registered phones are recognised automatically (effect above); otherwise ask.
-  if (identity === undefined && registeredAs) return null
-  // Not chosen yet, or the claimed player left the tournament → ask again.
-  if (identity === undefined || (identity.playerId !== null && !claimed)) {
+  // Not chosen yet (and not registered), or the claimed player left the tournament → ask.
+  if (effectiveIdentity === undefined || (effectiveIdentity.playerId !== null && !claimed)) {
     return (
       <div className="app">
         <header className="topbar">
@@ -131,7 +130,7 @@ export function ViewerApp({ code }: { code: string }) {
   if (t.phase === 'finished') tabs.splice(1, 1)
 
   return (
-    <StaticTournamentProvider t={t} viewerPlayerId={identity?.playerId ?? null}>
+    <StaticTournamentProvider t={t} viewerPlayerId={effectiveIdentity?.playerId ?? null}>
       <div className="app">
         <header className="topbar">
           <h1 className="topbar-title">{t.name}</h1>

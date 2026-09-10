@@ -25,18 +25,27 @@ function db() {
   return getDatabase(app())
 }
 
-/** Anonymous identity, persisted by the SDK on this device. */
+let signingIn: Promise<string> | null = null
+
+/**
+ * Anonymous identity, persisted by the SDK on this device. Single-flight: on a
+ * first visit several parts of the page ask at once, and two concurrent
+ * signInAnonymously calls would create two different identities.
+ */
 export function ensureSignedIn(): Promise<string> {
   const auth = getAuth(app())
   if (auth.currentUser) return Promise.resolve(auth.currentUser.uid)
-  return new Promise((resolve, reject) => {
+  if (signingIn) return signingIn
+  let started = false
+  signingIn = new Promise<string>((resolve, reject) => {
     const stop = onAuthStateChanged(
       auth,
       (user) => {
         if (user) {
           stop()
           resolve(user.uid)
-        } else {
+        } else if (!started) {
+          started = true
           signInAnonymously(auth).catch((e) => {
             stop()
             reject(e)
@@ -48,7 +57,10 @@ export function ensureSignedIn(): Promise<string> {
         reject(e)
       },
     )
+  }).finally(() => {
+    signingIn = null
   })
+  return signingIn
 }
 
 export async function createRoom(t: Tournament): Promise<string> {
