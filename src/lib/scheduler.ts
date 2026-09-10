@@ -516,14 +516,18 @@ export function describeSchedule(t: Pick<Tournament, 'players' | 'arenas' | 'rou
 }
 
 /**
- * Fewest rounds in which every player can play every arena: each round `G·k`
- * of the `P` players get one arena-play, and everyone needs `A` of them.
- * Null when no group can be formed. This is a lower bound — see suggestRounds.
+ * Fewest rounds in which every player can play every arena. Two constraints:
+ * each round `G·k` of the `P` players get one arena-play and everyone needs `A`
+ * of them; and every arena must host all `P` players, i.e. be used in at least
+ * ⌈P/k⌉ rounds, with `G` arenas in use per round. Null when no group can be
+ * formed. Still a lower bound — see suggestRounds for the verified number.
  */
 export function minRoundsForFullCoverage(playerCount: number, arenaCount: number, groupSize: number): number | null {
   const { groups } = roundShape(playerCount, arenaCount, groupSize)
   if (groups < 1 || arenaCount < 1) return null
-  return Math.ceil((arenaCount * playerCount) / (groups * groupSize))
+  const byPlays = Math.ceil((arenaCount * playerCount) / (groups * groupSize))
+  const byArenaVisits = Math.ceil((arenaCount * Math.ceil(playerCount / groupSize)) / groups)
+  return Math.max(byPlays, byArenaVisits)
 }
 
 export interface RoundSuggestion {
